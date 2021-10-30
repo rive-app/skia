@@ -234,6 +234,7 @@ void SkGlyphRunListPainter::processGlyphRun(const SkGlyphRun& glyphRun,
                                             const GrSDFTControl& control,
                                             SkGlyphRunPainterInterface* process,
                                             const char* tag) {
+#ifndef RIVE_OPTIMIZED
 #if SK_GPU_V1
     #if defined(SK_TRACE_GLYPH_RUN_PROCESS)
         SkString msg;
@@ -371,6 +372,7 @@ void SkGlyphRunListPainter::processGlyphRun(const SkGlyphRun& glyphRun,
         SkDebugf("%s\n", msg.c_str());
     #endif
 #endif // SK_GPU_V1
+#endif // RIVE_OPTIMIZED
 }
 #endif  // SK_SUPPORT_GPU
 

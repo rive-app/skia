@@ -331,6 +331,27 @@ void Device::drawPaint(const SkPaint& paint) {
     fSurfaceDrawContext->drawPaint(this->clip(), std::move(grPaint), this->localToDevice());
 }
 
+#ifdef RIVE_OPTIMIZED
+void Device::drawPoints(SkCanvas::PointMode mode,
+                        size_t count,
+                        const SkPoint pts[],
+                        const SkPaint& paint) {}
+void Device::drawRect(const SkRect& rect, const SkPaint& paint) {}
+void Device::drawEdgeAAQuad(const SkRect& rect,
+                            const SkPoint clip[4],
+                            SkCanvas::QuadAAFlags aaFlags,
+                            const SkColor4f& color,
+                            SkBlendMode mode) {}
+void Device::drawRRect(const SkRRect& rrect, const SkPaint& paint) {}
+void Device::drawDRRect(const SkRRect& outer, const SkRRect& inner, const SkPaint& paint) {}
+void Device::drawRegion(const SkRegion& region, const SkPaint& paint) {}
+void Device::drawOval(const SkRect& oval, const SkPaint& paint) {}
+void Device::drawArc(const SkRect& oval,
+                     SkScalar startAngle,
+                     SkScalar sweepAngle,
+                     bool useCenter,
+                     const SkPaint& paint) {}
+#else
 void Device::drawPoints(SkCanvas::PointMode mode,
                         size_t count,
                         const SkPoint pts[],
@@ -612,6 +633,7 @@ void Device::drawArc(const SkRect& oval,
                                  fSurfaceDrawContext->chooseAA(paint), this->localToDevice(), oval,
                                  startAngle, sweepAngle, useCenter, GrStyle(paint));
 }
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -758,6 +780,19 @@ void Device::drawImageRect(const SkImage* image,
                         constraint);
 }
 
+#ifdef RIVE_OPTIMIZED
+void Device::drawViewLattice(GrSurfaceProxyView view,
+                             const GrColorInfo& info,
+                             std::unique_ptr<SkLatticeIter> iter,
+                             const SkRect& dst,
+                             SkFilterMode filter,
+                             const SkPaint& origPaint) {}
+void Device::drawImageLattice(const SkImage* image,
+                              const SkCanvas::Lattice& lattice,
+                              const SkRect& dst,
+                              SkFilterMode filter,
+                              const SkPaint& paint) {}
+#else
 void Device::drawViewLattice(GrSurfaceProxyView view,
                              const GrColorInfo& info,
                              std::unique_ptr<SkLatticeIter> iter,
@@ -808,6 +843,7 @@ void Device::drawImageLattice(const SkImage* image,
                               paint);
     }
 }
+#endif
 
 void Device::drawVertices(const SkVertices* vertices, SkBlendMode mode, const SkPaint& paint) {
     ASSERT_SINGLE_OWNER
@@ -829,6 +865,16 @@ void Device::drawVertices(const SkVertices* vertices, SkBlendMode mode, const Sk
                                       effect);
 }
 
+#ifdef RIVE_OPTIMIZED
+void Device::drawShadow(const SkPath& path, const SkDrawShadowRec& rec) {}
+void Device::drawAtlas(const SkRSXform xform[],
+                       const SkRect texRect[],
+                       const SkColor colors[],
+                       int count,
+                       SkBlendMode mode,
+                       const SkPaint& paint) {}
+void Device::onDrawGlyphRunList(const SkGlyphRunList& glyphRunList, const SkPaint& paint) {}
+#else
 ///////////////////////////////////////////////////////////////////////////////
 
 void Device::drawShadow(const SkPath& path, const SkDrawShadowRec& rec) {
@@ -885,6 +931,7 @@ void Device::onDrawGlyphRunList(const SkGlyphRunList& glyphRunList, const SkPain
     fSurfaceDrawContext->drawGlyphRunList(
         this->clip(), this->asMatrixProvider(), glyphRunList, paint);
 }
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 

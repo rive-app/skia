@@ -1,3 +1,4 @@
+#ifndef RIVE_OPTIMIZED
 /*
  * Copyright 2013 Google Inc.
  *
@@ -720,3 +721,4 @@ SkBaseDevice::ClipType SkBitmapDevice::onGetClipType() const {
 SkIRect SkBitmapDevice::onDevClipBounds() const {
     return fRCStack.rc().getBounds();
 }
+#endif

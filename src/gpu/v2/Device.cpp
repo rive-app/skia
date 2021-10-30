@@ -301,11 +301,14 @@ void Device::drawDrawable(SkDrawable* drawable,
 
     this->INHERITED::drawDrawable(drawable, matrix, canvas);
 }
-
+#ifdef RIVE_OPTIMIZED
+void Device::onDrawGlyphRunList(const SkGlyphRunList& glyphRunList, const SkPaint& paint) {}
+#else
 void Device::onDrawGlyphRunList(const SkGlyphRunList& glyphRunList, const SkPaint& paint) {
     ASSERT_SINGLE_OWNER
     GR_CREATE_TRACE_MARKER_CONTEXT("skgpu::v2::Device", "onDrawGlyphRunList", fContext.get());
 }
+#endif
 
 void Device::drawDevice(SkBaseDevice* device,
                         const SkSamplingOptions& sampling,

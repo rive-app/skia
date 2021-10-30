@@ -228,6 +228,11 @@ void SkRecorder::onDrawImageLattice2(const SkImage* image, const Lattice& lattic
            this->copy(lattice.fColors, flagCount), *lattice.fBounds, dst, filter);
 }
 
+#ifdef RIVE_OPTIMIZED
+void SkRecorder::onDrawTextBlob(const SkTextBlob* blob, SkScalar x, SkScalar y,
+                                const SkPaint& paint) {}
+void SkRecorder::onDrawGlyphRunList(const SkGlyphRunList& glyphRunList, const SkPaint& paint) {}
+#else
 void SkRecorder::onDrawTextBlob(const SkTextBlob* blob, SkScalar x, SkScalar y,
                                 const SkPaint& paint) {
     TRY_MINIRECORDER(drawTextBlob, blob, x, y, paint);
@@ -242,6 +247,7 @@ void SkRecorder::onDrawGlyphRunList(const SkGlyphRunList& glyphRunList, const Sk
 
     this->onDrawTextBlob(blob.get(), glyphRunList.origin().x(), glyphRunList.origin().y(), paint);
 }
+#endif
 
 void SkRecorder::onDrawPicture(const SkPicture* pic, const SkMatrix* matrix, const SkPaint* paint) {
     fApproxBytesUsedBySubPictures += pic->approximateBytesUsed();

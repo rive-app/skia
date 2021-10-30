@@ -397,7 +397,9 @@ void SkCanvas::init(sk_sp<SkBaseDevice> device) {
 
     fSurfaceBase = nullptr;
     fBaseDevice = std::move(device);
+#ifndef RIVE_OPTIMIZED
     fScratchGlyphRunBuilder = std::make_unique<SkGlyphRunBuilder>();
+#endif
     fQuickRejectBounds = this->computeDeviceClipBounds();
 }
 
@@ -430,6 +432,10 @@ SkCanvas::SkCanvas(sk_sp<SkBaseDevice> device)
     this->init(device);
 }
 
+#ifdef RIVE_OPTIMIZED
+SkCanvas::SkCanvas(const SkBitmap& bitmap, const SkSurfaceProps& props)
+        : fMCStack(sizeof(MCRec), fMCRecStorage, sizeof(fMCRecStorage)), fProps(props) {}
+#else
 SkCanvas::SkCanvas(const SkBitmap& bitmap, const SkSurfaceProps& props)
         : fMCStack(sizeof(MCRec), fMCRecStorage, sizeof(fMCRecStorage)), fProps(props) {
     inc_canvas();
@@ -437,7 +443,15 @@ SkCanvas::SkCanvas(const SkBitmap& bitmap, const SkSurfaceProps& props)
     sk_sp<SkBaseDevice> device(new SkBitmapDevice(bitmap, fProps, nullptr, nullptr));
     this->init(device);
 }
+#endif
 
+#ifdef RIVE_OPTIMIZED
+SkCanvas::SkCanvas(const SkBitmap& bitmap,
+                   std::unique_ptr<SkRasterHandleAllocator> alloc,
+                   SkRasterHandleAllocator::Handle hndl)
+        : fMCStack(sizeof(MCRec), fMCRecStorage, sizeof(fMCRecStorage))
+        , fAllocator(std::move(alloc)) {}
+#else
 SkCanvas::SkCanvas(const SkBitmap& bitmap,
                    std::unique_ptr<SkRasterHandleAllocator> alloc,
                    SkRasterHandleAllocator::Handle hndl)
@@ -448,10 +462,15 @@ SkCanvas::SkCanvas(const SkBitmap& bitmap,
     sk_sp<SkBaseDevice> device(new SkBitmapDevice(bitmap, fProps, hndl, nullptr));
     this->init(device);
 }
+#endif
 
 SkCanvas::SkCanvas(const SkBitmap& bitmap) : SkCanvas(bitmap, nullptr, nullptr) {}
 
 #ifdef SK_BUILD_FOR_ANDROID_FRAMEWORK
+#ifdef RIVE_OPTIMIZED
+SkCanvas::SkCanvas(const SkBitmap& bitmap, ColorBehavior)
+        : fMCStack(sizeof(MCRec), fMCRecStorage, sizeof(fMCRecStorage)) {}
+#else
 SkCanvas::SkCanvas(const SkBitmap& bitmap, ColorBehavior)
         : fMCStack(sizeof(MCRec), fMCRecStorage, sizeof(fMCRecStorage)) {
     inc_canvas();
@@ -461,6 +480,7 @@ SkCanvas::SkCanvas(const SkBitmap& bitmap, ColorBehavior)
     sk_sp<SkBaseDevice> device(new SkBitmapDevice(tmp, fProps, nullptr, nullptr));
     this->init(device);
 }
+#endif
 #endif
 
 SkCanvas::~SkCanvas() {
@@ -1707,7 +1727,10 @@ GrRecordingContext* SkCanvas::recordingContext() {
 
     return nullptr;
 }
-
+#ifdef RIVE_OPTIMIZED
+void SkCanvas::drawDRRect(const SkRRect& outer, const SkRRect& inner,
+                          const SkPaint& paint) {}
+#else
 void SkCanvas::drawDRRect(const SkRRect& outer, const SkRRect& inner,
                           const SkPaint& paint) {
     TRACE_EVENT0("skia", TRACE_FUNC);
@@ -1730,24 +1753,34 @@ void SkCanvas::drawDRRect(const SkRRect& outer, const SkRRect& inner,
 
     this->onDrawDRRect(outer, inner, paint);
 }
+#endif
 
 void SkCanvas::drawPaint(const SkPaint& paint) {
     TRACE_EVENT0("skia", TRACE_FUNC);
     this->onDrawPaint(paint);
 }
-
+#ifdef RIVE_OPTIMIZED
+void SkCanvas::drawRect(const SkRect& r, const SkPaint& paint) {}
+#else
 void SkCanvas::drawRect(const SkRect& r, const SkPaint& paint) {
     TRACE_EVENT0("skia", TRACE_FUNC);
     // To avoid redundant logic in our culling code and various backends, we always sort rects
     // before passing them along.
     this->onDrawRect(r.makeSorted(), paint);
 }
+#endif
 
 void SkCanvas::drawClippedToSaveBehind(const SkPaint& paint) {
     TRACE_EVENT0("skia", TRACE_FUNC);
     this->onDrawBehind(paint);
 }
 
+#ifdef RIVE_OPTIMIZED
+void SkCanvas::drawRegion(const SkRegion& region, const SkPaint& paint) {}
+void SkCanvas::drawOval(const SkRect& r, const SkPaint& paint) {}
+void SkCanvas::drawRRect(const SkRRect& rrect, const SkPaint& paint) {}
+void SkCanvas::drawPoints(PointMode mode, size_t count, const SkPoint pts[], const SkPaint& paint) {}
+#else 
 void SkCanvas::drawRegion(const SkRegion& region, const SkPaint& paint) {
     TRACE_EVENT0("skia", TRACE_FUNC);
     if (region.isEmpty()) {
@@ -1777,6 +1810,7 @@ void SkCanvas::drawPoints(PointMode mode, size_t count, const SkPoint pts[], con
     TRACE_EVENT0("skia", TRACE_FUNC);
     this->onDrawPoints(mode, count, pts, paint);
 }
+#endif
 
 void SkCanvas::drawVertices(const sk_sp<SkVertices>& vertices, SkBlendMode mode,
                             const SkPaint& paint) {
@@ -1825,6 +1859,17 @@ static SkPaint clean_paint_for_lattice(const SkPaint* paint) {
     return cleaned;
 }
 
+#ifdef RIVE_OPTIMIZED
+void SkCanvas::drawImageNine(const SkImage* image, const SkIRect& center, const SkRect& dst,
+                             SkFilterMode filter, const SkPaint* paint) {}
+void SkCanvas::drawImageLattice(const SkImage* image, const Lattice& lattice, const SkRect& dst,
+                                SkFilterMode filter, const SkPaint* paint) {}
+void SkCanvas::drawAtlas(const SkImage* atlas, const SkRSXform xform[], const SkRect tex[],
+                         const SkColor colors[], int count, SkBlendMode mode,
+                         const SkSamplingOptions& sampling, const SkRect* cull,
+                         const SkPaint* paint) {}
+void SkCanvas::drawAnnotation(const SkRect& rect, const char key[], SkData* value) {}
+#else
 void SkCanvas::drawImageNine(const SkImage* image, const SkIRect& center, const SkRect& dst,
                              SkFilterMode filter, const SkPaint* paint) {
     RETURN_ON_NULL(image);
@@ -1886,6 +1931,7 @@ void SkCanvas::drawAnnotation(const SkRect& rect, const char key[], SkData* valu
         this->onDrawAnnotation(rect, key, value);
     }
 }
+#endif
 
 void SkCanvas::private_draw_shadow_rec(const SkPath& path, const SkDrawShadowRec& rec) {
     TRACE_EVENT0("skia", TRACE_FUNC);
@@ -1943,6 +1989,19 @@ void SkCanvas::internalDrawPaint(const SkPaint& paint) {
     this->topDevice()->drawPaint(layer.paint());
 }
 
+#ifdef RIVE_OPTIMIZED
+void SkCanvas::onDrawPoints(PointMode mode, size_t count, const SkPoint pts[],
+                            const SkPaint& paint) {}
+void SkCanvas::onDrawRect(const SkRect& r, const SkPaint& paint) {}
+void SkCanvas::onDrawRegion(const SkRegion& region, const SkPaint& paint) {}
+void SkCanvas::onDrawBehind(const SkPaint& paint) {}
+void SkCanvas::onDrawOval(const SkRect& oval, const SkPaint& paint) {}
+void SkCanvas::onDrawArc(const SkRect& oval, SkScalar startAngle,
+                         SkScalar sweepAngle, bool useCenter,
+                         const SkPaint& paint) {}
+void SkCanvas::onDrawRRect(const SkRRect& rrect, const SkPaint& paint) {}
+void SkCanvas::onDrawDRRect(const SkRRect& outer, const SkRRect& inner, const SkPaint& paint) {}
+#else
 void SkCanvas::onDrawPoints(PointMode mode, size_t count, const SkPoint pts[],
                             const SkPaint& paint) {
     if ((long)count <= 0 || paint.nothingToDraw()) {
@@ -2084,6 +2143,7 @@ void SkCanvas::onDrawDRRect(const SkRRect& outer, const SkRRect& inner, const Sk
     AutoLayerForImageFilter layer(this, paint, &bounds);
     this->topDevice()->drawDRRect(outer, inner, layer.paint());
 }
+#endif
 
 void SkCanvas::onDrawPath(const SkPath& path, const SkPaint& paint) {
     if (!path.isFinite()) {
@@ -2209,6 +2269,10 @@ void SkCanvas::onDrawImageRect2(const SkImage* image, const SkRect& src, const S
     this->topDevice()->drawImageRect(image, &src, dst, sampling, layer.paint(), constraint);
 }
 
+#ifdef RIVE_OPTIMIZED
+void SkCanvas::onDrawImageLattice2(const SkImage* image, const Lattice& lattice, const SkRect& dst,
+                                   SkFilterMode filter, const SkPaint* paint) {}
+#else
 void SkCanvas::onDrawImageLattice2(const SkImage* image, const Lattice& lattice, const SkRect& dst,
                                    SkFilterMode filter, const SkPaint* paint) {
     SkPaint realPaint = clean_paint_for_drawImage(paint);
@@ -2220,6 +2284,7 @@ void SkCanvas::onDrawImageLattice2(const SkImage* image, const Lattice& lattice,
     AutoLayerForImageFilter layer(this, realPaint, &dst);
     this->topDevice()->drawImageLattice(image, lattice, dst, filter, layer.paint());
 }
+#endif
 
 void SkCanvas::drawImage(const SkImage* image, SkScalar x, SkScalar y,
                          const SkSamplingOptions& sampling, const SkPaint* paint) {
@@ -2245,6 +2310,23 @@ void SkCanvas::drawImageRect(const SkImage* image, const SkRect& dst,
                         paint, kFast_SrcRectConstraint);
 }
 
+#ifdef RIVE_OPTIMIZED
+void SkCanvas::onDrawTextBlob(const SkTextBlob* blob, SkScalar x, SkScalar y,
+                              const SkPaint& paint) {}
+
+void SkCanvas::drawTextBlob(const SkTextBlob* blob, SkScalar x, SkScalar y,
+                            const SkPaint& paint) {}
+void SkCanvas::onDrawGlyphRunList(const SkGlyphRunList& glyphRunList, const SkPaint& paint) {}
+void SkCanvas::drawSimpleText(const void* text, size_t byteLength, SkTextEncoding encoding,
+                              SkScalar x, SkScalar y, const SkFont& font, const SkPaint& paint) {}
+void SkCanvas::drawGlyphs(int count, const SkGlyphID* glyphs, const SkPoint* positions,
+                          const uint32_t* clusters, int textByteCount, const char* utf8text,
+                          SkPoint origin, const SkFont& font, const SkPaint& paint) {}
+void SkCanvas::drawGlyphs(int count, const SkGlyphID glyphs[], const SkPoint positions[],
+                          SkPoint origin, const SkFont& font, const SkPaint& paint) {}
+void SkCanvas::drawGlyphs(int count, const SkGlyphID glyphs[], const SkRSXform xforms[],
+                          SkPoint origin, const SkFont& font, const SkPaint& paint) {}
+#else
 void SkCanvas::onDrawTextBlob(const SkTextBlob* blob, SkScalar x, SkScalar y,
                               const SkPaint& paint) {
     auto glyphRunList = fScratchGlyphRunBuilder->blobToGlyphRunList(*blob, {x, y});
@@ -2359,6 +2441,7 @@ void SkCanvas::drawTextBlob(const SkTextBlob* blob, SkScalar x, SkScalar y,
     }
     this->onDrawTextBlob(blob, x, y, paint);
 }
+#endif
 
 void SkCanvas::onDrawVerticesObject(const SkVertices* vertices, SkBlendMode bmode,
                                     const SkPaint& paint) {
@@ -2373,6 +2456,14 @@ void SkCanvas::onDrawVerticesObject(const SkVertices* vertices, SkBlendMode bmod
     this->topDevice()->drawVertices(vertices, bmode, layer.paint());
 }
 
+#ifdef RIVE_OPTIMIZED
+void SkCanvas::drawPatch(const SkPoint cubics[12], const SkColor colors[4],
+                         const SkPoint texCoords[4], SkBlendMode bmode,
+                         const SkPaint& paint) {}
+void SkCanvas::onDrawPatch(const SkPoint cubics[12], const SkColor colors[4],
+                           const SkPoint texCoords[4], SkBlendMode bmode,
+                           const SkPaint& paint) {}
+#else
 void SkCanvas::drawPatch(const SkPoint cubics[12], const SkColor colors[4],
                          const SkPoint texCoords[4], SkBlendMode bmode,
                          const SkPaint& paint) {
@@ -2401,6 +2492,7 @@ void SkCanvas::onDrawPatch(const SkPoint cubics[12], const SkColor colors[4],
     AutoLayerForImageFilter layer(this, simplePaint, &bounds);
     this->topDevice()->drawPatch(cubics, colors, texCoords, bmode, layer.paint());
 }
+#endif
 
 void SkCanvas::drawDrawable(SkDrawable* dr, SkScalar x, SkScalar y) {
 #ifndef SK_BUILD_FOR_ANDROID_FRAMEWORK
@@ -2433,6 +2525,19 @@ void SkCanvas::onDrawDrawable(SkDrawable* dr, const SkMatrix* matrix) {
     this->topDevice()->drawDrawable(dr, matrix, this);
 }
 
+#ifdef RIVE_OPTIMIZED
+void SkCanvas::onDrawAtlas2(const SkImage* atlas, const SkRSXform xform[], const SkRect tex[],
+                            const SkColor colors[], int count, SkBlendMode bmode,
+                            const SkSamplingOptions& sampling, const SkRect* cull,
+                            const SkPaint* paint) {}
+void SkCanvas::onDrawAnnotation(const SkRect& rect, const char key[], SkData* value) {}
+void SkCanvas::onDrawEdgeAAQuad(const SkRect& r, const SkPoint clip[4], QuadAAFlags edgeAA,
+                                const SkColor4f& color, SkBlendMode mode) {}
+void SkCanvas::onDrawEdgeAAImageSet2(const ImageSetEntry imageSet[], int count,
+                                     const SkPoint dstClips[], const SkMatrix preViewMatrices[],
+                                     const SkSamplingOptions& sampling, const SkPaint* paint,
+                                     SrcRectConstraint constraint) {}
+#else
 void SkCanvas::onDrawAtlas2(const SkImage* atlas, const SkRSXform xform[], const SkRect tex[],
                             const SkColor colors[], int count, SkBlendMode bmode,
                             const SkSamplingOptions& sampling, const SkRect* cull,
@@ -2511,6 +2616,7 @@ void SkCanvas::onDrawEdgeAAImageSet2(const ImageSetEntry imageSet[], int count,
     this->topDevice()->drawEdgeAAImageSet(imageSet, count, dstClips, preViewMatrices, sampling,
                                           layer.paint(), constraint);
 }
+#endif
 
 //////////////////////////////////////////////////////////////////////////////
 // These methods are NOT virtual, and therefore must call back into virtual
@@ -2524,6 +2630,16 @@ void SkCanvas::drawColor(const SkColor4f& c, SkBlendMode mode) {
     this->drawPaint(paint);
 }
 
+#ifdef RIVE_OPTIMIZED
+void SkCanvas::drawPoint(SkScalar x, SkScalar y, const SkPaint& paint) {}
+void SkCanvas::drawLine(SkScalar x0, SkScalar y0, SkScalar x1, SkScalar y1, const SkPaint& paint) {}
+void SkCanvas::drawCircle(SkScalar cx, SkScalar cy, SkScalar radius, const SkPaint& paint) {}
+void SkCanvas::drawRoundRect(const SkRect& r, SkScalar rx, SkScalar ry,
+                             const SkPaint& paint) {}
+void SkCanvas::drawArc(const SkRect& oval, SkScalar startAngle,
+                       SkScalar sweepAngle, bool useCenter,
+                       const SkPaint& paint) {}
+#else
 void SkCanvas::drawPoint(SkScalar x, SkScalar y, const SkPaint& paint) {
     const SkPoint pt = { x, y };
     this->drawPoints(kPoints_PointMode, 1, &pt, paint);
@@ -2566,6 +2682,7 @@ void SkCanvas::drawArc(const SkRect& oval, SkScalar startAngle,
     }
     this->onDrawArc(oval, startAngle, sweepAngle, useCenter, paint);
 }
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 #ifdef SK_DISABLE_SKPICTURE

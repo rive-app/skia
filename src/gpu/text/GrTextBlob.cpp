@@ -1513,6 +1513,13 @@ void* GrTextBlob::operator new(size_t, void* p) { return p; }
 
 GrTextBlob::~GrTextBlob() = default;
 
+#ifdef RIVE_OPTIMIZED
+sk_sp<GrTextBlob> GrTextBlob::Make(const SkGlyphRunList& glyphRunList,
+                                   const SkPaint& paint,
+                                   const SkMatrix& drawMatrix,
+                                   const GrSDFTControl& control,
+                                   SkGlyphRunListPainter* painter) { return nullptr; }
+#else
 sk_sp<GrTextBlob> GrTextBlob::Make(const SkGlyphRunList& glyphRunList,
                                    const SkPaint& paint,
                                    const SkMatrix& drawMatrix,
@@ -1550,6 +1557,7 @@ sk_sp<GrTextBlob> GrTextBlob::Make(const SkGlyphRunList& glyphRunList,
 
     return blob;
 }
+#endif
 
 void GrTextBlob::addKey(const Key& key) {
     fKey = key;
@@ -1587,6 +1595,13 @@ bool GrTextBlob::canReuse(const SkPaint& paint, const SkMatrix& drawMatrix) cons
 const GrTextBlob::Key& GrTextBlob::key() const { return fKey; }
 size_t GrTextBlob::size() const { return fSize; }
 
+#ifdef RIVE_OPTIMIZED
+template<typename AddSingleMaskFormat>
+void GrTextBlob::addMultiMaskFormat(
+        AddSingleMaskFormat addSingle,
+        const SkZip<SkGlyphVariant, SkPoint>& drawables,
+        const SkStrikeSpec& strikeSpec) {}
+#else
 template<typename AddSingleMaskFormat>
 void GrTextBlob::addMultiMaskFormat(
         AddSingleMaskFormat addSingle,
@@ -1620,6 +1635,7 @@ void GrTextBlob::addMultiMaskFormat(
     auto sameFormat = drawables.last(drawables.size() - startIndex);
     addSameFormat(sameFormat, format);
 }
+#endif
 
 GrTextBlob::GrTextBlob(int allocSize,
                        const SkMatrix& drawMatrix,
@@ -1630,6 +1646,20 @@ GrTextBlob::GrTextBlob(int allocSize,
         , fInitialLuminance{initialLuminance} { }
 
 #if SK_GPU_V1
+#ifdef RIVE_OPTIMIZED
+void GrTextBlob::processDeviceMasks(const SkZip<SkGlyphVariant, SkPoint>& drawables,
+                                    const SkStrikeSpec& strikeSpec) {}
+void GrTextBlob::processSourcePaths(const SkZip<SkGlyphVariant, SkPoint>& drawables,
+                                    const SkFont& runFont,
+                                    const SkStrikeSpec& strikeSpec) {}
+void GrTextBlob::processSourceSDFT(const SkZip<SkGlyphVariant, SkPoint>& drawables,
+                                   const SkStrikeSpec& strikeSpec,
+                                   const SkFont& runFont,
+                                   SkScalar minScale,
+                                   SkScalar maxScale) {}
+void GrTextBlob::processSourceMasks(const SkZip<SkGlyphVariant, SkPoint>& drawables,
+                                    const SkStrikeSpec& strikeSpec) {}
+#else
 void GrTextBlob::processDeviceMasks(const SkZip<SkGlyphVariant, SkPoint>& drawables,
                                     const SkStrikeSpec& strikeSpec) {
 
@@ -1662,6 +1692,7 @@ void GrTextBlob::processSourceMasks(const SkZip<SkGlyphVariant, SkPoint>& drawab
     this->addMultiMaskFormat(TransformedMaskSubRun::Make, drawables, strikeSpec);
 }
 #endif // SK_GPU_V1
+#endif // RIVE_OPTIMIZED
 
 // ----------------------------- Begin no cache implementation -------------------------------------
 namespace {

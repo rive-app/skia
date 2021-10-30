@@ -338,6 +338,11 @@ PtProcRec::Proc PtProcRec::chooseProc(SkBlitter** blitterPtr) {
 // must be even for lines/polygon to work
 #define MAX_DEV_PTS     32
 
+#ifdef RIVE_OPTIMIZED
+void SkDraw::drawPoints(SkCanvas::PointMode mode, size_t count,
+                        const SkPoint pts[], const SkPaint& paint,
+                        SkBaseDevice* device) const {}
+#else
 void SkDraw::drawPoints(SkCanvas::PointMode mode, size_t count,
                         const SkPoint pts[], const SkPaint& paint,
                         SkBaseDevice* device) const {
@@ -537,6 +542,7 @@ void SkDraw::drawPoints(SkCanvas::PointMode mode, size_t count,
         }
     }
 }
+#endif
 
 static inline SkPoint compute_stroke_size(const SkPaint& paint, const SkMatrix& matrix) {
     SkASSERT(matrix.rectStaysRect());
@@ -765,6 +771,9 @@ bool SkDrawTreatAAStrokeAsHairline(SkScalar strokeWidth, const SkMatrix& matrix,
     return false;
 }
 
+#ifdef RIVE_OPTIMIZED
+void SkDraw::drawRRect(const SkRRect& rrect, const SkPaint& paint) const {}
+#else
 void SkDraw::drawRRect(const SkRRect& rrect, const SkPaint& paint) const {
     SkDEBUGCODE(this->validate());
 
@@ -804,6 +813,7 @@ DRAW_PATH:
     path.addRRect(rrect);
     this->drawPath(path, paint, nullptr, true);
 }
+#endif
 
 void SkDraw::drawDevPath(const SkPath& devPath, const SkPaint& paint, bool drawCoverage,
                          SkBlitter* customBlitter, bool doFill) const {
@@ -957,6 +967,10 @@ void SkDraw::drawPath(const SkPath& origSrcPath, const SkPaint& origPaint,
     this->drawDevPath(*devPathPtr, *paint, drawCoverage, customBlitter, doFill);
 }
 
+#ifdef RIVE_OPTIMIZED
+void SkDraw::drawBitmapAsMask(const SkBitmap& bitmap, const SkSamplingOptions& sampling,
+                              const SkPaint& paint) const {}
+#else
 void SkDraw::drawBitmapAsMask(const SkBitmap& bitmap, const SkSamplingOptions& sampling,
                               const SkPaint& paint) const {
     SkASSERT(bitmap.colorType() == kAlpha_8_SkColorType);
@@ -1042,6 +1056,7 @@ void SkDraw::drawBitmapAsMask(const SkBitmap& bitmap, const SkSamplingOptions& s
         this->drawDevMask(mask, paint);
     }
 }
+#endif
 
 static bool clipped_out(const SkMatrix& m, const SkRasterClip& c,
                         const SkRect& srcR) {
@@ -1061,6 +1076,12 @@ static bool clipHandlesSprite(const SkRasterClip& clip, int x, int y, const SkPi
     return clip.isBW() || clip.quickContains(SkIRect::MakeXYWH(x, y, pmap.width(), pmap.height()));
 }
 
+#ifdef RIVE_OPTIMIZED
+void SkDraw::drawBitmap(const SkBitmap& bitmap, const SkMatrix& prematrix,
+                        const SkRect* dstBounds, const SkSamplingOptions& sampling,
+                        const SkPaint& origPaint) const {}
+void SkDraw::drawSprite(const SkBitmap& bitmap, int x, int y, const SkPaint& origPaint) const {}
+#else
 void SkDraw::drawBitmap(const SkBitmap& bitmap, const SkMatrix& prematrix,
                         const SkRect* dstBounds, const SkSamplingOptions& sampling,
                         const SkPaint& origPaint) const {
@@ -1179,6 +1200,7 @@ void SkDraw::drawSprite(const SkBitmap& bitmap, int x, int y, const SkPaint& ori
     // call ourself with a rect
     draw.drawRect(r, paintWithShader);
 }
+#endif
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
