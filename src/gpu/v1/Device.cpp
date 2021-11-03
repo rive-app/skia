@@ -336,21 +336,6 @@ void Device::drawPoints(SkCanvas::PointMode mode,
                         size_t count,
                         const SkPoint pts[],
                         const SkPaint& paint) {}
-void Device::drawRect(const SkRect& rect, const SkPaint& paint) {}
-void Device::drawEdgeAAQuad(const SkRect& rect,
-                            const SkPoint clip[4],
-                            SkCanvas::QuadAAFlags aaFlags,
-                            const SkColor4f& color,
-                            SkBlendMode mode) {}
-void Device::drawRRect(const SkRRect& rrect, const SkPaint& paint) {}
-void Device::drawDRRect(const SkRRect& outer, const SkRRect& inner, const SkPaint& paint) {}
-void Device::drawRegion(const SkRegion& region, const SkPaint& paint) {}
-void Device::drawOval(const SkRect& oval, const SkPaint& paint) {}
-void Device::drawArc(const SkRect& oval,
-                     SkScalar startAngle,
-                     SkScalar sweepAngle,
-                     bool useCenter,
-                     const SkPaint& paint) {}
 #else
 void Device::drawPoints(SkCanvas::PointMode mode,
                         size_t count,
@@ -426,6 +411,7 @@ void Device::drawPoints(SkCanvas::PointMode mode,
     fSurfaceDrawContext->drawVertices(this->clip(), std::move(grPaint), *matrixProvider,
                                       std::move(vertices), &primitiveType);
 }
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -455,6 +441,22 @@ void Device::drawRect(const SkRect& rect, const SkPaint& paint) {
                                   &style);
 }
 
+#ifdef RIVE_OPTIMIZED
+void Device::drawEdgeAAQuad(const SkRect& rect,
+                            const SkPoint clip[4],
+                            SkCanvas::QuadAAFlags aaFlags,
+                            const SkColor4f& color,
+                            SkBlendMode mode) {}
+void Device::drawRRect(const SkRRect& rrect, const SkPaint& paint) {}
+void Device::drawDRRect(const SkRRect& outer, const SkRRect& inner, const SkPaint& paint) {}
+void Device::drawRegion(const SkRegion& region, const SkPaint& paint) {}
+void Device::drawOval(const SkRect& oval, const SkPaint& paint) {}
+void Device::drawArc(const SkRect& oval,
+                     SkScalar startAngle,
+                     SkScalar sweepAngle,
+                     bool useCenter,
+                     const SkPaint& paint) {}
+#else
 void Device::drawEdgeAAQuad(const SkRect& rect,
                             const SkPoint clip[4],
                             SkCanvas::QuadAAFlags aaFlags,

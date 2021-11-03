@@ -117,6 +117,24 @@ static inline bool is_int(float x) {
     return x == (float) sk_float_round2int(x);
 }
 
+
+#ifdef RIVE_OPTIMIZED
+void SkBaseDevice::drawRegion(const SkRegion& region, const SkPaint& paint) {}
+void SkBaseDevice::drawArc(const SkRect& oval, SkScalar startAngle,
+                           SkScalar sweepAngle, bool useCenter, const SkPaint& paint) {}
+void SkBaseDevice::drawDRRect(const SkRRect& outer,
+                              const SkRRect& inner, const SkPaint& paint) {}
+void SkBaseDevice::drawPatch(const SkPoint cubics[12], const SkColor colors[4],
+                             const SkPoint texCoords[4], SkBlendMode bmode, const SkPaint& paint) {}
+void SkBaseDevice::drawImageLattice(const SkImage* image, const SkCanvas::Lattice& lattice,
+                                    const SkRect& dst, SkFilterMode filter, const SkPaint& paint) {}
+void SkBaseDevice::drawAtlas(const SkRSXform xform[],
+                             const SkRect tex[],
+                             const SkColor colors[],
+                             int quadCount,
+                             SkBlendMode mode,
+                             const SkPaint& paint) {}
+#else
 void SkBaseDevice::drawRegion(const SkRegion& region, const SkPaint& paint) {
     const SkMatrix& localToDevice = this->localToDevice();
     bool isNonTranslate = localToDevice.getType() & ~(SkMatrix::kTranslate_Mask);
@@ -240,6 +258,7 @@ void SkBaseDevice::drawAtlas(const SkRSXform xform[],
     }
     this->drawVertices(builder.detach().get(), mode, paint);
 }
+#endif
 
 void SkBaseDevice::drawEdgeAAQuad(const SkRect& r, const SkPoint clip[4], SkCanvas::QuadAAFlags aa,
                                   const SkColor4f& color, SkBlendMode mode) {

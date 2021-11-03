@@ -727,14 +727,6 @@ void SurfaceDrawContext::drawTexturedQuad(const GrClip* clip,
     }
 }
 
-#ifdef RIVE_OPTIMIZED
-void SurfaceDrawContext::drawRect(const GrClip* clip,
-                                  GrPaint&& paint,
-                                  GrAA aa,
-                                  const SkMatrix& viewMatrix,
-                                  const SkRect& rect,
-                                  const GrStyle* style) {}
-#else
 void SurfaceDrawContext::drawRect(const GrClip* clip,
                                   GrPaint&& paint,
                                   GrAA aa,
@@ -787,7 +779,6 @@ void SurfaceDrawContext::drawRect(const GrClip* clip,
     this->drawShapeUsingPathRenderer(clip, std::move(paint), aa, viewMatrix,
                                      GrStyledShape(rect, *style, DoSimplify::kNo));
 }
-#endif
 
 void SurfaceDrawContext::fillRectToRect(const GrClip* clip,
                                         GrPaint&& paint,

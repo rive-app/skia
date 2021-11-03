@@ -311,6 +311,7 @@ public:
             : fPaint(paint)
             , fCanvas(canvas)
             , fTempLayerForImageFilter(false) {
+#ifndef RIVE_OPTIMIZED
         SkDEBUGCODE(fSaveCount = canvas->getSaveCount();)
 
         if (checkOverwrite == CheckForOverwrite::kYes) {
@@ -342,14 +343,16 @@ public:
                                             SkCanvas::kFullLayer_SaveLayerStrategy);
             fTempLayerForImageFilter = true;
         }
+#endif
     }
-
+#ifndef RIVE_OPTIMIZED
     ~AutoLayerForImageFilter() {
         if (fTempLayerForImageFilter) {
             fCanvas->internalRestore();
         }
         SkASSERT(fCanvas->getSaveCount() == fSaveCount);
     }
+#endif
 
     const SkPaint& paint() const { return fPaint; }
 
