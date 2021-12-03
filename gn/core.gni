@@ -595,6 +595,6 @@ if (rive_use_picture) {
 }
 
 skia_core_public += skia_pathops_public
-  skia_core_public += skia_skpicture_public
+skia_core_public += skia_skpicture_public
 
 skia_core_defines = []  #  Used to be used by Chromium, but no longer.
