@@ -7,6 +7,10 @@
 _src = get_path_info("../src", "abspath")
 _include = get_path_info("../include", "abspath")
 
+declare_args() {
+  rive_use_picture = false
+}
+
 skia_core_public = [
   "$_include/core/SkAnnotation.h",
   "$_include/core/SkBBHFactory.h",
@@ -586,9 +590,11 @@ skia_skpicture_sources = [
 ]
 
 skia_core_sources += skia_pathops_sources
-#skia_core_sources += skia_skpicture_sources
+if (rive_use_picture) {
+  skia_core_sources += skia_skpicture_sources
+}
 
 skia_core_public += skia_pathops_public
-skia_core_public += skia_skpicture_public
+  skia_core_public += skia_skpicture_public
 
 skia_core_defines = []  #  Used to be used by Chromium, but no longer.
