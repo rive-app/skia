@@ -307,6 +307,7 @@ public:
             : fPaint(paint)
             , fCanvas(canvas)
             , fTempLayerForImageFilter(false) {
+#ifndef RIVE_OPTIMIZED
         SkDEBUGCODE(fSaveCount = canvas->getSaveCount();)
 
         if (fPaint.getImageFilter() && !image_to_color_filter(&fPaint)) {
@@ -332,6 +333,7 @@ public:
                                             SkCanvas::kFullLayer_SaveLayerStrategy);
             fTempLayerForImageFilter = true;
         }
+#endif
     }
 
     AutoLayerForImageFilter(const AutoLayerForImageFilter&) = delete;
@@ -339,12 +341,14 @@ public:
     AutoLayerForImageFilter(AutoLayerForImageFilter&&) = default;
     AutoLayerForImageFilter& operator=(AutoLayerForImageFilter&&) = default;
 
+#ifndef RIVE_OPTIMIZED
     ~AutoLayerForImageFilter() {
         if (fTempLayerForImageFilter) {
             fCanvas->internalRestore();
         }
         SkASSERT(fCanvas->getSaveCount() == fSaveCount);
     }
+#endif
 
     const SkPaint& paint() const { return fPaint; }
 
