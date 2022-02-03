@@ -339,6 +339,11 @@ PtProcRec::Proc PtProcRec::chooseProc(SkBlitter** blitterPtr) {
 // must be even for lines/polygon to work
 #define MAX_DEV_PTS     32
 
+#ifdef RIVE_OPTIMIZED
+void SkDraw::drawPoints(SkCanvas::PointMode mode, size_t count,
+                        const SkPoint pts[], const SkPaint& paint,
+                        SkBaseDevice* device) const {}
+#else
 void SkDraw::drawPoints(SkCanvas::PointMode mode, size_t count,
                         const SkPoint pts[], const SkPaint& paint,
                         SkBaseDevice* device) const {
@@ -542,6 +547,7 @@ void SkDraw::drawPoints(SkCanvas::PointMode mode, size_t count,
         }
     }
 }
+#endif
 
 static inline SkPoint compute_stroke_size(const SkPaint& paint, const SkMatrix& matrix) {
     SkASSERT(matrix.rectStaysRect());
@@ -739,6 +745,9 @@ bool SkDrawTreatAAStrokeAsHairline(SkScalar strokeWidth, const SkMatrix& matrix,
     return false;
 }
 
+#ifdef RIVE_OPTIMIZED
+void SkDraw::drawRRect(const SkRRect& rrect, const SkPaint& paint) const {}
+#else
 void SkDraw::drawRRect(const SkRRect& rrect, const SkPaint& paint) const {
     SkDEBUGCODE(this->validate());
 
@@ -778,6 +787,7 @@ DRAW_PATH:
     path.addRRect(rrect);
     this->drawPath(path, paint, nullptr, true);
 }
+#endif
 
 void SkDraw::drawDevPath(const SkPath& devPath, const SkPaint& paint, bool drawCoverage,
                          SkBlitter* customBlitter, bool doFill) const {
@@ -931,6 +941,97 @@ void SkDraw::drawPath(const SkPath& origSrcPath, const SkPaint& origPaint,
     this->drawDevPath(*devPathPtr, *paint, drawCoverage, customBlitter, doFill);
 }
 
+#ifdef RIVE_OPTIMIZED
+void SkDraw::drawBitmapAsMask(const SkBitmap& bitmap, const SkSamplingOptions& sampling,
+                              const SkPaint& paint) const {}
+#else
+void SkDraw::drawBitmapAsMask(const SkBitmap& bitmap, const SkSamplingOptions& sampling,
+                              const SkPaint& paint) const {
+    SkASSERT(bitmap.colorType() == kAlpha_8_SkColorType);
+
+    // nothing to draw
+    if (fRC->isEmpty()) {
+        return;
+    }
+
+    SkMatrix ctm = fMatrixProvider->localToDevice();
+    if (SkTreatAsSprite(ctm, bitmap.dimensions(), sampling, paint))
+    {
+        int ix = SkScalarRoundToInt(ctm.getTranslateX());
+        int iy = SkScalarRoundToInt(ctm.getTranslateY());
+
+        SkPixmap pmap;
+        if (!bitmap.peekPixels(&pmap)) {
+            return;
+        }
+        SkMask  mask;
+        mask.fBounds.setXYWH(ix, iy, pmap.width(), pmap.height());
+        mask.fFormat = SkMask::kA8_Format;
+        mask.fRowBytes = SkToU32(pmap.rowBytes());
+        // fImage is typed as writable, but in this case it is used read-only
+        mask.fImage = (uint8_t*)pmap.addr8(0, 0);
+
+        this->drawDevMask(mask, paint);
+    } else {    // need to xform the bitmap first
+        SkRect  r;
+        SkMask  mask;
+
+        r.setIWH(bitmap.width(), bitmap.height());
+        ctm.mapRect(&r);
+        r.round(&mask.fBounds);
+
+        // set the mask's bounds to the transformed bitmap-bounds,
+        // clipped to the actual device and further limited by the clip bounds
+        {
+            SkASSERT(fDst.bounds().contains(fRC->getBounds()));
+            SkIRect devBounds = fDst.bounds();
+            devBounds.intersect(fRC->getBounds().makeOutset(1, 1));
+            // need intersect(l, t, r, b) on irect
+            if (!mask.fBounds.intersect(devBounds)) {
+                return;
+            }
+        }
+
+        mask.fFormat = SkMask::kA8_Format;
+        mask.fRowBytes = SkAlign4(mask.fBounds.width());
+        size_t size = mask.computeImageSize();
+        if (0 == size) {
+            // the mask is too big to allocated, draw nothing
+            return;
+        }
+
+        // allocate (and clear) our temp buffer to hold the transformed bitmap
+        SkAutoTMalloc<uint8_t> storage(size);
+        mask.fImage = storage.get();
+        memset(mask.fImage, 0, size);
+
+        // now draw our bitmap(src) into mask(dst), transformed by the matrix
+        {
+            SkBitmap    device;
+            device.installPixels(SkImageInfo::MakeA8(mask.fBounds.width(), mask.fBounds.height()),
+                                 mask.fImage, mask.fRowBytes);
+
+            SkCanvas c(device);
+            // need the unclipped top/left for the translate
+            c.translate(-SkIntToScalar(mask.fBounds.fLeft),
+                        -SkIntToScalar(mask.fBounds.fTop));
+            c.concat(ctm);
+
+            // We can't call drawBitmap, or we'll infinitely recurse. Instead
+            // we manually build a shader and draw that into our new mask
+            SkPaint tmpPaint;
+            tmpPaint.setAntiAlias(paint.isAntiAlias());
+            tmpPaint.setDither(paint.isDither());
+            SkPaint paintWithShader = make_paint_with_image(tmpPaint, bitmap, sampling);
+            SkRect rr;
+            rr.setIWH(bitmap.width(), bitmap.height());
+            c.drawRect(rr, paintWithShader);
+        }
+        this->drawDevMask(mask, paint);
+    }
+}
+#endif
+
 static bool clipped_out(const SkMatrix& m, const SkRasterClip& c,
                         const SkRect& srcR) {
     SkRect  dstR;
@@ -949,6 +1050,12 @@ static bool clipHandlesSprite(const SkRasterClip& clip, int x, int y, const SkPi
     return clip.isBW() || clip.quickContains(SkIRect::MakeXYWH(x, y, pmap.width(), pmap.height()));
 }
 
+#ifdef RIVE_OPTIMIZED
+void SkDraw::drawBitmap(const SkBitmap& bitmap, const SkMatrix& prematrix,
+                        const SkRect* dstBounds, const SkSamplingOptions& sampling,
+                        const SkPaint& origPaint) const {}
+void SkDraw::drawSprite(const SkBitmap& bitmap, int x, int y, const SkPaint& origPaint) const {}
+#else
 void SkDraw::drawBitmap(const SkBitmap& bitmap, const SkMatrix& prematrix,
                         const SkRect* dstBounds, const SkSamplingOptions& sampling,
                         const SkPaint& origPaint) const {
@@ -1063,6 +1170,7 @@ void SkDraw::drawSprite(const SkBitmap& bitmap, int x, int y, const SkPaint& ori
     // call ourself with a rect
     draw.drawRect(r, paintWithShader);
 }
+#endif
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
 

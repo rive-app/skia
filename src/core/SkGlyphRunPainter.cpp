@@ -260,7 +260,8 @@ void SkGlyphRunListPainter::processGlyphRun(SkGlyphRunPainterInterface* process,
                                             const SkPaint& runPaint,
                                             const GrSDFTControl& control,
                                             const char* tag,
-                                            uint64_t uniqueID) {
+                                            uint64_t uniqueID) 
+#ifndef RIVE_OPTIMIZED
     #if defined(SK_TRACE_GLYPH_RUN_PROCESS)
         SkString msg;
         msg.appendf("\nStart glyph run processing");
@@ -412,6 +413,7 @@ void SkGlyphRunListPainter::processGlyphRun(SkGlyphRunPainterInterface* process,
         }
         SkDebugf("%s\n", msg.c_str());
     #endif
+#endif // RIVE_OPTIMIZED
 }
 #endif  // SK_SUPPORT_GPU
 

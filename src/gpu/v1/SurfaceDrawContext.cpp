@@ -684,6 +684,14 @@ void SurfaceDrawContext::drawTexturedQuad(const GrClip* clip,
     }
 }
 
+#ifdef RIVE_OPTIMIZED
+void SurfaceDrawContext::drawRect(const GrClip* clip,
+                                  GrPaint&& paint,
+                                  GrAA aa,
+                                  const SkMatrix& viewMatrix,
+                                  const SkRect& rect,
+                                  const GrStyle* style) {}
+#else
 void SurfaceDrawContext::drawRect(const GrClip* clip,
                                   GrPaint&& paint,
                                   GrAA aa,
@@ -736,6 +744,7 @@ void SurfaceDrawContext::drawRect(const GrClip* clip,
     this->drawShapeUsingPathRenderer(clip, std::move(paint), aa, viewMatrix,
                                      GrStyledShape(rect, *style, DoSimplify::kNo));
 }
+#endif
 
 void SurfaceDrawContext::fillRectToRect(const GrClip* clip,
                                         GrPaint&& paint,
@@ -983,6 +992,56 @@ void SurfaceDrawContext::drawCustomMesh(const GrClip* clip,
     this->addDrawOp(clip, std::move(op));
 }
 
+#ifdef RIVE_OPTIMIZED
+void SurfaceDrawContext::drawAtlas(const GrClip* clip,
+                                   GrPaint&& paint,
+                                   const SkMatrix& viewMatrix,
+                                   int spriteCount,
+                                   const SkRSXform xform[],
+                                   const SkRect texRect[],
+                                   const SkColor colors[]) {}
+void SurfaceDrawContext::drawRRect(const GrClip* origClip,
+                                   GrPaint&& paint,
+                                   GrAA aa,
+                                   const SkMatrix& viewMatrix,
+                                   const SkRRect& rrect,
+                                   const GrStyle& style) {}
+bool SurfaceDrawContext::drawFastShadow(const GrClip* clip,
+                                        const SkMatrix& viewMatrix,
+                                        const SkPath& path,
+                                        const SkDrawShadowRec& rec) { return false; }
+void SurfaceDrawContext::drawRegion(const GrClip* clip,
+                                    GrPaint&& paint,
+                                    GrAA aa,
+                                    const SkMatrix& viewMatrix,
+                                    const SkRegion& region,
+                                    const GrStyle& style,
+                                    const GrUserStencilSettings* ss) {}
+void SurfaceDrawContext::drawOval(const GrClip* clip,
+                                  GrPaint&& paint,
+                                  GrAA aa,
+                                  const SkMatrix& viewMatrix,
+                                  const SkRect& oval,
+                                  const GrStyle& style) {}
+void SurfaceDrawContext::drawArc(const GrClip* clip,
+                                 GrPaint&& paint,
+                                 GrAA aa,
+                                 const SkMatrix& viewMatrix,
+                                 const SkRect& oval,
+                                 SkScalar startAngle,
+                                 SkScalar sweepAngle,
+                                 bool useCenter,
+                                 const GrStyle& style) {}
+void SurfaceDrawContext::drawImageLattice(const GrClip* clip,
+                                          GrPaint&& paint,
+                                          const SkMatrix& viewMatrix,
+                                          GrSurfaceProxyView view,
+                                          SkAlphaType alphaType,
+                                          sk_sp<GrColorSpaceXform> csxf,
+                                          GrSamplerState::Filter filter,
+                                          std::unique_ptr<SkLatticeIter> iter,
+                                          const SkRect& dst) {}
+#else
 ///////////////////////////////////////////////////////////////////////////////
 
 void SurfaceDrawContext::drawAtlas(const GrClip* clip,
@@ -1467,6 +1526,7 @@ void SurfaceDrawContext::drawImageLattice(const GrClip* clip,
                                    alphaType, std::move(csxf), filter, std::move(iter), dst);
     this->addDrawOp(clip, std::move(op));
 }
+#endif
 
 void SurfaceDrawContext::drawDrawable(std::unique_ptr<SkDrawable::GpuDrawHandler> drawable,
                                       const SkRect& bounds) {

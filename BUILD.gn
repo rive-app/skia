@@ -1534,19 +1534,19 @@ skia_static_library("pathkit") {
   ]
 }
 
-group("modules") {
-  deps = [
-    "modules/particles",
-    "modules/skottie",
-    "modules/skparagraph",
-    "modules/skshaper",
-    "modules/svg",
-  ]
-}
+# group("modules") {
+#  deps = [
+#    "modules/particles",
+#    "modules/skottie",
+#    "modules/skparagraph",
+#    "modules/skshaper",
+#    "modules/svg",
+#  ]
+#}
 
-group("experimental") {
-  deps = [ "experimental/sktext" ]
-}
+#group("experimental") {
+#  deps = [ "experimental/sktext" ]
+#}
 
 config("our_vulkan_headers") {
   include_dirs = [ "include/third_party/vulkan" ]
@@ -3385,8 +3385,8 @@ if (is_ios && skia_enable_skottie && !skia_enable_flutter_defines) {
   }
 }
 
-skia_executable("skia_c_api_example") {
-  sources = [ "experimental/c-api-example/skia-c-example.c" ]
-  include_dirs = [ "." ]
-  deps = [ ":skia" ]
-}
+#skia_executable("skia_c_api_example") {
+#  sources = [ "experimental/c-api-example/skia-c-example.c" ]
+#  include_dirs = [ "." ]
+#  deps = [ ":skia" ]
+#}

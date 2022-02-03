@@ -22,6 +22,14 @@
 #pragma warning ( disable : 4701 )
 #endif
 
+#ifdef RIVE_OPTIMIZED
+void SkDraw::paintMasks(SkDrawableGlyphBuffer* drawables, const SkPaint& paint) const {}
+void SkDraw::paintPaths(SkDrawableGlyphBuffer* drawables,
+                        SkScalar scale,
+                        SkPoint origin,
+                        const SkPaint& paint) const {}
+#else
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 static bool check_glyph_position(SkPoint position) {
@@ -34,7 +42,6 @@ static bool check_glyph_position(SkPoint position) {
              gt(position.fY, INT_MAX - (INT16_MAX + SkTo<int>(UINT16_MAX))) ||
              lt(position.fY, INT_MIN - (INT16_MIN + 0 /*UINT16_MIN*/)));
 }
-
 void SkDraw::paintMasks(SkDrawableGlyphBuffer* drawables, const SkPaint& paint) const {
 
     // The size used for a typical blitter.
@@ -119,6 +126,7 @@ void SkDraw::drawGlyphRunList(SkCanvas* canvas,
     glyphPainter->drawForBitmapDevice(canvas, this, glyphRunList, paint,
                                       fMatrixProvider->localToDevice());
 }
+#endif
 
 #if defined _WIN32
 #pragma warning ( pop )
