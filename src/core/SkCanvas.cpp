@@ -2358,6 +2358,11 @@ void SkCanvas::onDrawTextBlob(const SkTextBlob* blob, SkScalar x, SkScalar y,
 void SkCanvas::drawTextBlob(const SkTextBlob* blob, SkScalar x, SkScalar y,
                             const SkPaint& paint) {}
 void SkCanvas::onDrawGlyphRunList(const SkGlyphRunList& glyphRunList, const SkPaint& paint) {}
+sk_sp<GrSlug> SkCanvas::convertBlobToSlug(
+        const SkTextBlob& blob, SkPoint origin, const SkPaint& paint) {}
+sk_sp<GrSlug> SkCanvas::doConvertBlobToSlug(const SkTextBlob& blob, SkPoint origin, const SkPaint& paint) {}
+void SkCanvas::drawSlug(GrSlug* slug) {}
+void SkCanvas::doDrawSlug(GrSlug* slug) {}
 void SkCanvas::drawSimpleText(const void* text, size_t byteLength, SkTextEncoding encoding,
                               SkScalar x, SkScalar y, const SkFont& font, const SkPaint& paint) {}
 void SkCanvas::drawGlyphs(int count, const SkGlyphID* glyphs, const SkPoint* positions,
