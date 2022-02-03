@@ -112,14 +112,15 @@ void SkBaseDevice::drawArc(const SkRect& oval, SkScalar startAngle,
 void SkBaseDevice::drawDRRect(const SkRRect& outer,
                               const SkRRect& inner, const SkPaint& paint) {}
 void SkBaseDevice::drawPatch(const SkPoint cubics[12], const SkColor colors[4],
-                             const SkPoint texCoords[4], SkBlendMode bmode, const SkPaint& paint) {}
+                             const SkPoint texCoords[4], sk_sp<SkBlender> blender,
+                             const SkPaint& paint) {}
 void SkBaseDevice::drawImageLattice(const SkImage* image, const SkCanvas::Lattice& lattice,
                                     const SkRect& dst, SkFilterMode filter, const SkPaint& paint) {}
 void SkBaseDevice::drawAtlas(const SkRSXform xform[],
                              const SkRect tex[],
                              const SkColor colors[],
                              int quadCount,
-                             SkBlendMode mode,
+                             sk_sp<SkBlender> blender,
                              const SkPaint& paint) {}
 #else
 void SkBaseDevice::drawRegion(const SkRegion& region, const SkPaint& paint) {

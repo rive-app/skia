@@ -24,10 +24,6 @@
 
 #ifdef RIVE_OPTIMIZED
 void SkDraw::paintMasks(SkDrawableGlyphBuffer* drawables, const SkPaint& paint) const {}
-void SkDraw::paintPaths(SkDrawableGlyphBuffer* drawables,
-                        SkScalar scale,
-                        SkPoint origin,
-                        const SkPaint& paint) const {}
 #else
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

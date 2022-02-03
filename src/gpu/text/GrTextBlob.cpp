@@ -1697,7 +1697,8 @@ GrTextBlob::~GrTextBlob() = default;
 #ifdef RIVE_OPTIMIZED
 sk_sp<GrTextBlob> GrTextBlob::Make(const SkGlyphRunList& glyphRunList,
                                    const SkPaint& paint,
-                                   const SkMatrix& drawMatrix,
+                                   const SkMatrix& positionMatrix,
+                                   bool supportBilerpAtlas,
                                    const GrSDFTControl& control,
                                    SkGlyphRunListPainter* painter) { return nullptr; }
 #else
@@ -1812,18 +1813,19 @@ GrTextBlob::GrTextBlob(int allocSize,
 
 #if SK_GPU_V1
 #ifdef RIVE_OPTIMIZED
-void GrTextBlob::processDeviceMasks(const SkZip<SkGlyphVariant, SkPoint>& drawables,
-                                    const SkStrikeSpec& strikeSpec) {}
+void GrTextBlob::processDeviceMasks(
+        const SkZip<SkGlyphVariant, SkPoint>& drawables, sk_sp<SkStrike>&& strike) {}
 void GrTextBlob::processSourcePaths(const SkZip<SkGlyphVariant, SkPoint>& drawables,
                                     const SkFont& runFont,
-                                    const SkStrikeSpec& strikeSpec) {}
+                                    SkScalar strikeToSourceScale) {}
 void GrTextBlob::processSourceSDFT(const SkZip<SkGlyphVariant, SkPoint>& drawables,
-                                   const SkStrikeSpec& strikeSpec,
+                                   sk_sp<SkStrike>&& strike,
+                                   SkScalar strikeToSourceScale,
                                    const SkFont& runFont,
-                                   SkScalar minScale,
-                                   SkScalar maxScale) {}
+                                   const GrSDFTMatrixRange& matrixRange) {}
 void GrTextBlob::processSourceMasks(const SkZip<SkGlyphVariant, SkPoint>& drawables,
-                                    const SkStrikeSpec& strikeSpec) {}
+                                    sk_sp<SkStrike>&& strike,
+                                    SkScalar strikeToSourceScale) {}
 #else
 void GrTextBlob::processDeviceMasks(
         const SkZip<SkGlyphVariant, SkPoint>& drawables, sk_sp<SkStrike>&& strike) {

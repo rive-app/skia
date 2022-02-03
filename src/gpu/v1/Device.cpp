@@ -939,9 +939,11 @@ void Device::drawAtlas(const SkRSXform xform[],
                        const SkRect texRect[],
                        const SkColor colors[],
                        int count,
-                       SkBlendMode mode,
+                       sk_sp<SkBlender> blender,
                        const SkPaint& paint) {}
-void Device::onDrawGlyphRunList(const SkGlyphRunList& glyphRunList, const SkPaint& paint) {}
+void Device::onDrawGlyphRunList(SkCanvas* canvas,
+                                const SkGlyphRunList& glyphRunList,
+                                const SkPaint& paint) {}
 #else
 ///////////////////////////////////////////////////////////////////////////////
 
