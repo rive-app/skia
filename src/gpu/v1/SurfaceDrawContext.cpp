@@ -983,56 +983,6 @@ void SurfaceDrawContext::drawCustomMesh(const GrClip* clip,
     this->addDrawOp(clip, std::move(op));
 }
 
-#ifdef RIVE_OPTIMIZED
-void SurfaceDrawContext::drawAtlas(const GrClip* clip,
-                                   GrPaint&& paint,
-                                   const SkMatrix& viewMatrix,
-                                   int spriteCount,
-                                   const SkRSXform xform[],
-                                   const SkRect texRect[],
-                                   const SkColor colors[]) {}
-void SurfaceDrawContext::drawRRect(const GrClip* origClip,
-                                   GrPaint&& paint,
-                                   GrAA aa,
-                                   const SkMatrix& viewMatrix,
-                                   const SkRRect& rrect,
-                                   const GrStyle& style) {}
-bool SurfaceDrawContext::drawFastShadow(const GrClip* clip,
-                                        const SkMatrix& viewMatrix,
-                                        const SkPath& path,
-                                        const SkDrawShadowRec& rec) { return false; }
-void SurfaceDrawContext::drawRegion(const GrClip* clip,
-                                    GrPaint&& paint,
-                                    GrAA aa,
-                                    const SkMatrix& viewMatrix,
-                                    const SkRegion& region,
-                                    const GrStyle& style,
-                                    const GrUserStencilSettings* ss) {}
-void SurfaceDrawContext::drawOval(const GrClip* clip,
-                                  GrPaint&& paint,
-                                  GrAA aa,
-                                  const SkMatrix& viewMatrix,
-                                  const SkRect& oval,
-                                  const GrStyle& style) {}
-void SurfaceDrawContext::drawArc(const GrClip* clip,
-                                 GrPaint&& paint,
-                                 GrAA aa,
-                                 const SkMatrix& viewMatrix,
-                                 const SkRect& oval,
-                                 SkScalar startAngle,
-                                 SkScalar sweepAngle,
-                                 bool useCenter,
-                                 const GrStyle& style) {}
-void SurfaceDrawContext::drawImageLattice(const GrClip* clip,
-                                          GrPaint&& paint,
-                                          const SkMatrix& viewMatrix,
-                                          GrSurfaceProxyView view,
-                                          SkAlphaType alphaType,
-                                          sk_sp<GrColorSpaceXform> csxf,
-                                          GrSamplerState::Filter filter,
-                                          std::unique_ptr<SkLatticeIter> iter,
-                                          const SkRect& dst) {}
-#else
 ///////////////////////////////////////////////////////////////////////////////
 
 void SurfaceDrawContext::drawAtlas(const GrClip* clip,
@@ -1042,6 +992,8 @@ void SurfaceDrawContext::drawAtlas(const GrClip* clip,
                                    const SkRSXform xform[],
                                    const SkRect texRect[],
                                    const SkColor colors[]) {
+
+#ifdef RIVE_OPTIMIZED
     ASSERT_SINGLE_OWNER
     RETURN_IF_ABANDONED
     SkDEBUGCODE(this->validate();)
@@ -1053,6 +1005,7 @@ void SurfaceDrawContext::drawAtlas(const GrClip* clip,
     GrOp::Owner op = DrawAtlasOp::Make(fContext, std::move(paint), viewMatrix,
                                        aaType, spriteCount, xform, texRect, colors);
     this->addDrawOp(clip, std::move(op));
+#endif
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1152,6 +1105,43 @@ void SurfaceDrawContext::drawRRect(const GrClip* origClip,
 
 ///////////////////////////////////////////////////////////////////////////////
 
+#ifdef RIVE_OPTIMIZED
+bool SurfaceDrawContext::drawFastShadow(const GrClip* clip,
+                                        const SkMatrix& viewMatrix,
+                                        const SkPath& path,
+                                        const SkDrawShadowRec& rec) { return false; }
+void SurfaceDrawContext::drawRegion(const GrClip* clip,
+                                    GrPaint&& paint,
+                                    GrAA aa,
+                                    const SkMatrix& viewMatrix,
+                                    const SkRegion& region,
+                                    const GrStyle& style,
+                                    const GrUserStencilSettings* ss) {}
+void SurfaceDrawContext::drawOval(const GrClip* clip,
+                                  GrPaint&& paint,
+                                  GrAA aa,
+                                  const SkMatrix& viewMatrix,
+                                  const SkRect& oval,
+                                  const GrStyle& style) {}
+void SurfaceDrawContext::drawArc(const GrClip* clip,
+                                 GrPaint&& paint,
+                                 GrAA aa,
+                                 const SkMatrix& viewMatrix,
+                                 const SkRect& oval,
+                                 SkScalar startAngle,
+                                 SkScalar sweepAngle,
+                                 bool useCenter,
+                                 const GrStyle& style) {}
+void SurfaceDrawContext::drawImageLattice(const GrClip* clip,
+                                          GrPaint&& paint,
+                                          const SkMatrix& viewMatrix,
+                                          GrSurfaceProxyView view,
+                                          SkAlphaType alphaType,
+                                          sk_sp<GrColorSpaceXform> csxf,
+                                          GrSamplerState::Filter filter,
+                                          std::unique_ptr<SkLatticeIter> iter,
+                                          const SkRect& dst) {}
+#else
 bool SurfaceDrawContext::drawFastShadow(const GrClip* clip,
                                         const SkMatrix& viewMatrix,
                                         const SkPath& path,
