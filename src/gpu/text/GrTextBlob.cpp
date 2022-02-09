@@ -1842,6 +1842,7 @@ void GrTextBlob::processDeviceMasks(
         }
     };
     add_multi_mask_format(addGlyphsWithSameFormat, drawables, std::move(strike));
+}
 
 void GrTextBlob::processSourcePaths(const SkZip<SkGlyphVariant, SkPoint>& drawables,
                                     const SkFont& runFont,
