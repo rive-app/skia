@@ -8,6 +8,7 @@
 #include "include/core/SkPaint.h"
 #include "src/core/SkScalerContext.h"
 
+#include "include/core/SkDrawable.h"
 #include "include/core/SkFontMetrics.h"
 #include "include/core/SkMaskFilter.h"
 #include "include/core/SkPathEffect.h"
@@ -695,6 +696,14 @@ void SkScalerContext::getPath(SkGlyph& glyph, SkArenaAlloc* alloc) {
     this->internalGetPath(glyph, alloc);
 }
 
+sk_sp<SkDrawable> SkScalerContext::getDrawable(SkGlyph& glyph) {
+    return this->generateDrawable(glyph);
+}
+//TODO: make pure virtual
+sk_sp<SkDrawable> SkScalerContext::generateDrawable(const SkGlyph&) {
+    return nullptr;
+}
+
 void SkScalerContext::getFontMetrics(SkFontMetrics* fm) {
     SkASSERT(fm);
     this->generateFontMetrics(fm);
@@ -866,17 +875,17 @@ bool SkScalerContextRec::computeMatrices(PreMatrixScale preMatrixScale, SkVector
 
     // At this point, given GA, create s.
     switch (preMatrixScale) {
-        case kFull_PreMatrixScale:
+        case PreMatrixScale::kFull:
             s->fX = SkScalarAbs(GA.get(SkMatrix::kMScaleX));
             s->fY = SkScalarAbs(GA.get(SkMatrix::kMScaleY));
             break;
-        case kVertical_PreMatrixScale: {
+        case PreMatrixScale::kVertical: {
             SkScalar yScale = SkScalarAbs(GA.get(SkMatrix::kMScaleY));
             s->fX = yScale;
             s->fY = yScale;
             break;
         }
-        case kVerticalInteger_PreMatrixScale: {
+        case PreMatrixScale::kVerticalInteger: {
             SkScalar realYScale = SkScalarAbs(GA.get(SkMatrix::kMScaleY));
             SkScalar intYScale = SkScalarRoundToScalar(realYScale);
             if (intYScale == 0) {
@@ -890,18 +899,18 @@ bool SkScalerContextRec::computeMatrices(PreMatrixScale preMatrixScale, SkVector
 
     // The 'remaining' matrix sA is the total matrix A without the scale.
     if (!skewedOrFlipped && (
-            (kFull_PreMatrixScale == preMatrixScale) ||
-            (kVertical_PreMatrixScale == preMatrixScale && A.getScaleX() == A.getScaleY())))
+            (PreMatrixScale::kFull == preMatrixScale) ||
+            (PreMatrixScale::kVertical == preMatrixScale && A.getScaleX() == A.getScaleY())))
     {
-        // If GA == A and kFull_PreMatrixScale, sA is identity.
-        // If GA == A and kVertical_PreMatrixScale and A.scaleX == A.scaleY, sA is identity.
+        // If GA == A and kFull, sA is identity.
+        // If GA == A and kVertical and A.scaleX == A.scaleY, sA is identity.
         sA->reset();
-    } else if (!skewedOrFlipped && kVertical_PreMatrixScale == preMatrixScale) {
-        // If GA == A and kVertical_PreMatrixScale, sA.scaleY is SK_Scalar1.
+    } else if (!skewedOrFlipped && PreMatrixScale::kVertical == preMatrixScale) {
+        // If GA == A and kVertical, sA.scaleY is SK_Scalar1.
         sA->reset();
         sA->setScaleX(A.getScaleX() / s->fY);
     } else {
-        // TODO: like kVertical_PreMatrixScale, kVerticalInteger_PreMatrixScale with int scales.
+        // TODO: like kVertical, kVerticalInteger with int scales.
         *sA = A;
         sA->preScale(SkScalarInvert(s->fX), SkScalarInvert(s->fY));
     }
@@ -929,18 +938,18 @@ SkAxisAlignment SkScalerContextRec::computeAxisAlignmentForHText() const {
     // In other words, making the text bigger, stretching it along the
     // horizontal axis, or fake italicizing it does not move the baseline.
     if (!SkToBool(fFlags & SkScalerContext::kBaselineSnap_Flag)) {
-        return kNone_SkAxisAlignment;
+        return SkAxisAlignment::kNone;
     }
 
     if (0 == fPost2x2[1][0]) {
         // The x axis is mapped onto the x axis.
-        return kX_SkAxisAlignment;
+        return SkAxisAlignment::kX;
     }
     if (0 == fPost2x2[0][0]) {
         // The x axis is mapped onto the y axis.
-        return kY_SkAxisAlignment;
+        return SkAxisAlignment::kY;
     }
-    return kNone_SkAxisAlignment;
+    return SkAxisAlignment::kNone;
 }
 
 void SkScalerContextRec::setLuminanceColor(SkColor c) {
@@ -1004,7 +1013,7 @@ void SkScalerContext::MakeRecAndEffects(const SkFont& font, const SkPaint& paint
 
     SkTypeface* typeface = font.getTypefaceOrDefault();
 
-    rec->fFontID = typeface->uniqueID();
+    rec->fTypefaceID = typeface->uniqueID();
     rec->fTextSize = font.getSize();
     rec->fPreScaleX = font.getScaleX();
     rec->fPreSkewX  = font.getSkewX();

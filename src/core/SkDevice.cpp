@@ -502,11 +502,11 @@ void SkBaseDevice::simplifyGlyphRunRSXFormAndRedraw(SkCanvas* canvas,
 #if SK_SUPPORT_GPU
 sk_sp<GrSlug> SkBaseDevice::convertGlyphRunListToSlug(
         const SkGlyphRunList& glyphRunList,
-        const SkPaint& paint) const {
+        const SkPaint& paint) {
     return nullptr;
 }
 
-void SkBaseDevice::drawSlug(SkCanvas*, GrSlug*) {
+void SkBaseDevice::drawSlug(SkCanvas*, const GrSlug*) {
     SK_ABORT("GrSlug drawing not supported.");
 }
 #endif

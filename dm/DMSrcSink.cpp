@@ -68,10 +68,6 @@
     #include "modules/skresources/include/SkResources.h"
 #endif
 
-#if defined(SK_ENABLE_SKRIVE)
-    #include "experimental/skrive/include/SkRive.h"
-#endif
-
 #if defined(SK_ENABLE_SVG)
     #include "include/svg/SkSVGCanvas.h"
     #include "modules/svg/include/SkSVGDOM.h"
@@ -998,7 +994,9 @@ Result ImageGenSrc::draw(GrDirectContext*, SkCanvas* canvas) const {
             status = Result::Status::Skip;
         }
 #endif
-        return Result(status, "Image generator could not getPixels() for %s\n", fPath.c_str());
+        return Result(
+                status,
+                SkStringPrintf("Image generator could not getPixels() for %s\n", fPath.c_str()));
     }
 
     set_bitmap_color_space(&decodeInfo);
@@ -1261,61 +1259,6 @@ bool SkottieSrc::veto(SinkFlags flags) const {
 #endif
 
 /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-#if defined(SK_ENABLE_SKRIVE)
-SkRiveSrc::SkRiveSrc(Path path) : fPath(std::move(path)) {}
-
-Result SkRiveSrc::draw(GrDirectContext*, SkCanvas* canvas) const {
-    auto fileStream = SkFILEStream::Make(fPath.c_str());
-    if (!fileStream) {
-        return Result::Fatal("Unable to open file: %s", fPath.c_str());
-    }
-
-    const auto skrive = skrive::SkRive::Builder().make(std::move(fileStream));
-    if (!skrive) {
-        return Result::Fatal("Unable to parse file: %s", fPath.c_str());
-    }
-
-    auto bounds = SkRect::MakeEmpty();
-
-    for (const auto& ab : skrive->artboards()) {
-        const auto& pos  = ab->getTranslation();
-        const auto& size = ab->getSize();
-
-        bounds.join(SkRect::MakeXYWH(pos.x, pos.y, size.x, size.y));
-    }
-
-    canvas->drawColor(SK_ColorWHITE);
-
-    if (!bounds.isEmpty()) {
-        // TODO: tiled frames when we add animation support
-        SkAutoCanvasRestore acr(canvas, true);
-        canvas->concat(SkMatrix::RectToRect(bounds, SkRect::MakeWH(kTargetSize, kTargetSize),
-                                            SkMatrix::kCenter_ScaleToFit));
-        for (const auto& ab : skrive->artboards()) {
-            ab->render(canvas);
-        }
-    }
-
-    return Result::Ok();
-}
-
-SkISize SkRiveSrc::size() const {
-    return SkISize::Make(kTargetSize, kTargetSize);
-}
-
-Name SkRiveSrc::name() const { return SkOSPath::Basename(fPath.c_str()); }
-
-bool SkRiveSrc::veto(SinkFlags flags) const {
-    // No need to test to non-(raster||gpu||vector) or indirect backends.
-    bool type_ok = flags.type == SinkFlags::kRaster
-                || flags.type == SinkFlags::kGPU
-                || flags.type == SinkFlags::kVector;
-
-    return !type_ok || flags.approach != SinkFlags::kDirect;
-}
-#endif
-
-/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 #if defined(SK_ENABLE_SVG)
 // Used when the image doesn't have an intrinsic size.
 static const SkSize kDefaultSVGSize = {1000, 1000};
@@ -1464,7 +1407,7 @@ static Result compare_bitmaps(const SkBitmap& reference, const SkBitmap& bitmap)
             errString.append("\nActual image failed to encode: ");
             errString.append(encoded);
         }
-        return Result::Fatal(errString);
+        return Result(Result::Status::Fatal, errString);
     }
     return Result::Ok();
 }
@@ -2164,7 +2107,7 @@ Result GraphiteSink::draw(const Src& src,
     }
 
     if (fTestPrecompile) {
-        precompile(context.get());
+        precompile(context);
     }
 
     std::unique_ptr<skgpu::Recorder> recorder = context->makeRecorder();
@@ -2184,16 +2127,16 @@ Result GraphiteSink::draw(const Src& src,
             return result;
         }
 
-        // For now we cast and call directly into Surface_Graphite. Once we have a been idea of
+        // For now we cast and call directly into Surface. Once we have a been idea of
         // what the public API for synchronous graphite readPixels we can update this call to use
         // that instead.
         SkPixmap pm;
         if (!dst->peekPixels(&pm) ||
-            !static_cast<skgpu::Surface_Graphite*>(surface.get())->onReadPixels(context.get(),
-                                                                                recorder.get(),
-                                                                                pm,
-                                                                                0,
-                                                                                0)) {
+            !static_cast<skgpu::Surface*>(surface.get())->onReadPixels(context,
+                                                                       recorder.get(),
+                                                                       pm,
+                                                                       0,
+                                                                       0)) {
             return Result::Fatal("Could not readback from surface.");
         }
     }
@@ -2375,7 +2318,7 @@ Result ViaRuntimeBlend::draw(const Src& src,
 
     protected:
         bool onFilter(SkPaint& paint) const override {
-            if (skstd::optional<SkBlendMode> mode = paint.asBlendMode()) {
+            if (std::optional<SkBlendMode> mode = paint.asBlendMode()) {
                 paint.setBlender(GetRuntimeBlendForBlendMode(*mode));
             }
             return true;

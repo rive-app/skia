@@ -61,10 +61,6 @@ struct ProgramSettings {
     bool fValidateSPIRV = true;
     // If true, any synthetic uniforms must use push constant syntax
     bool fUsePushConstants = false;
-    // Permits static if/switch statements to be used with non-constant tests. This is used when
-    // producing H and CPP code; the static tests don't have to have constant values *yet*, but
-    // the generated code will contain a static test which then does have to be a constant.
-    bool fPermitInvalidStaticTests = false;
     // If true, configurations which demand strict ES2 conformance (runtime effects, generic
     // programs, and SkVM rendering) will fail during compilation if ES2 restrictions are violated.
     bool fEnforceES2Restrictions = true;
@@ -81,6 +77,9 @@ struct ProgramSettings {
     bool fDSLUseMemoryPool = true;
     // If true, DSL objects assert that they were used prior to destruction
     bool fAssertDSLObjectsReleased = true;
+    // If true, VarDeclaration can be cloned for testing purposes. See VarDeclaration::clone for
+    // more information.
+    bool fAllowVarDeclarationCloneForTesting = false;
     // External functions available for use in runtime effects. These values are registered in the
     // symbol table of the Program, but ownership is *not* transferred. It is up to the caller to
     // keep them alive.

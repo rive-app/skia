@@ -57,6 +57,14 @@ struct RenderPassDesc {
     // * input attachments
 };
 
+// specifies a single region for copying, either from buffer to texture, or vice versa
+struct BufferTextureCopyData {
+    size_t fBufferOffset;
+    size_t fBufferRowBytes;
+    SkIRect fRect;
+    unsigned int fMipLevel;
+};
+
 class CommandBuffer : public SkRefCnt, private DrawDispatcher {
 public:
     ~CommandBuffer() override;
@@ -144,6 +152,10 @@ public:
                              sk_sp<Buffer>,
                              size_t bufferOffset,
                              size_t bufferRowBytes);
+    bool copyBufferToTexture(sk_sp<Buffer>,
+                             sk_sp<Texture>,
+                             const BufferTextureCopyData*,
+                             int count);
 
 protected:
     CommandBuffer();
@@ -193,6 +205,10 @@ private:
                                        const Buffer*,
                                        size_t bufferOffset,
                                        size_t bufferRowBytes) = 0;
+    virtual bool onCopyBufferToTexture(const Buffer*,
+                                       const Texture*,
+                                       const BufferTextureCopyData*,
+                                       int count) = 0;
 
 #ifdef SK_DEBUG
     bool fHasWork = false;

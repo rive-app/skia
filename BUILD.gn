@@ -7,6 +7,7 @@ import("gn/flutter_defines.gni")
 import("gn/fuchsia_defines.gni")
 import("gn/shared_sources.gni")
 import("gn/skia.gni")
+import("gn/toolchain/wasm.gni")
 
 if (is_fuchsia) {
   import("//build/fuchsia/sdk.gni")
@@ -47,6 +48,9 @@ config("skia_public") {
   if (is_fuchsia) {
     defines += fuchsia_defines
   }
+  if (is_wasm) {
+    defines += wasm_defines
+  }
   if (skia_gl_standard == "gles") {
     defines += [ "SK_ASSUME_GL_ES=1" ]
   } else if (skia_gl_standard == "gl") {
@@ -84,7 +88,7 @@ config("skia_private") {
       "SK_GAMMA_CONTRAST=0.0",
     ]
   }
-  if (is_skia_dev_build) {
+  if (is_skia_dev_build && !is_wasm) {
     defines += [
       "SK_ALLOW_STATIC_GLOBAL_INITIALIZERS=1",
       "GR_TEST_UTILS=1",
@@ -92,6 +96,9 @@ config("skia_private") {
     if (skia_enable_graphite) {
       defines += [ "GRAPHITE_TEST_UTILS=1" ]
     }
+  }
+  if (skia_compare_vm_vs_rp) {
+    defines += [ "SKIA_COMPARE_VM_VS_RP" ]
   }
   libs = []
   lib_dirs = []
@@ -1535,14 +1542,18 @@ skia_static_library("pathkit") {
 }
 
 # group("modules") {
-#  deps = [
-#    "modules/particles",
-#    "modules/skottie",
-#    "modules/skparagraph",
-#    "modules/skshaper",
-#    "modules/svg",
-#  ]
-#}
+#   deps = [
+#     "modules/particles",
+#     "modules/skottie",
+#     "modules/skparagraph",
+#     "modules/skshaper",
+#     "modules/svg",
+#   ]
+# 
+#   if (is_wasm) {
+#     deps += [ "modules/canvaskit" ]
+#   }
+# }
 
 #group("experimental") {
 #  deps = [ "experimental/sktext" ]
@@ -2031,6 +2042,8 @@ if (skia_enable_tools) {
     sources = [
       "tests/Test.cpp",
       "tests/Test.h",
+      "tests/TestHarness.cpp",
+      "tests/TestHarness.h",
       "tests/TestUtils.cpp",
       "tests/TestUtils.h",
     ]
@@ -2073,7 +2086,6 @@ if (skia_enable_tools) {
       ":skia",
       ":test",
       ":tool_utils",
-      "experimental/skrive:tests",
       "experimental/sktext:tests",
       "modules/skottie:tests",
       "modules/skparagraph:tests",
@@ -2104,15 +2116,6 @@ if (skia_enable_tools) {
       "modules/skparagraph:bench",
       "modules/skshaper",
     ]
-  }
-
-  test_lib("experimental_xform") {
-    sources = [
-      "experimental/xform/SkShape.cpp",
-      "experimental/xform/SkXform.cpp",
-      "experimental/xform/XContext.cpp",
-    ]
-    deps = [ ":skia" ]
   }
 
   if (is_linux || is_mac) {
@@ -2213,7 +2216,6 @@ if (skia_enable_tools) {
         ":tests",
         ":tool_utils",
         ":trace",
-        "experimental/skrive",
         "modules/skottie",
         "modules/skottie:utils",
         "modules/svg",
@@ -2440,19 +2442,6 @@ if (skia_enable_tools) {
     ]
   }
 
-  test_app("pathops_unittest") {
-    sources = pathops_tests_sources + [
-                rebase_path("tests/skia_test.cpp"),
-                rebase_path("tests/Test.cpp"),
-              ]
-    deps = [
-      ":flags",
-      ":gpu_tool_utils",
-      ":skia",
-      ":tool_utils",
-    ]
-  }
-
   test_app("dump_record") {
     sources = [ "tools/dump_record.cpp" ]
     deps = [
@@ -2490,6 +2479,7 @@ if (skia_enable_tools) {
       sources = [
         "dm/DMGpuTestProcs.cpp",
         "tools/skqp/src/skqp.cpp",
+        "tools/skqp/src/skqp.h",
       ]
       deps = [
         ":gm",
@@ -2805,8 +2795,6 @@ if (skia_enable_tools) {
         "tools/viewer/SKPSlide.h",
         "tools/viewer/SampleSlide.cpp",
         "tools/viewer/SampleSlide.h",
-        "tools/viewer/SkRiveSlide.cpp",
-        "tools/viewer/SkRiveSlide.h",
         "tools/viewer/SkSLDebuggerSlide.cpp",
         "tools/viewer/SkSLDebuggerSlide.h",
         "tools/viewer/SkSLSlide.cpp",
@@ -2838,7 +2826,6 @@ if (skia_enable_tools) {
         ":skia",
         ":tool_utils",
         ":trace",
-        "experimental/skrive",
         "experimental/sktext",
         "modules/audioplayer",
         "modules/particles",
@@ -2848,10 +2835,6 @@ if (skia_enable_tools) {
         "modules/svg",
         "//third_party/imgui",
       ]
-      if (skia_use_experimental_xform) {
-        deps += [ ":experimental_xform" ]
-        sources += [ "gm/xform.cpp" ]
-      }
       if (skia_use_vulkan) {
         deps += [
           "//third_party/externals/spirv-tools:spvtools",
@@ -2973,7 +2956,7 @@ if (skia_enable_tools) {
   group("modules_testonly") {
     testonly = true
     deps = []
-    if (target_cpu == "wasm") {
+    if (is_wasm) {
       deps += [ "modules/canvaskit:viewer_wasm" ]
     }
   }

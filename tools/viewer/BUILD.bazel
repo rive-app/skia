@@ -149,6 +149,7 @@ generated_cc_atom(
         ":ImGuiLayer_hdr",
         ":ParticlesSlide_hdr",
         "//include/core:SkCanvas_hdr",
+        "//include/private:SkStringView_hdr",
         "//modules/particles/include:SkParticleEffect_hdr",
         "//modules/particles/include:SkParticleSerialization_hdr",
         "//modules/particles/include:SkReflected_hdr",
@@ -202,27 +203,6 @@ generated_cc_atom(
         "//include/core:SkCanvas_hdr",
         "//include/core:SkStream_hdr",
         "//src/core:SkOSFile_hdr",
-    ],
-)
-
-generated_cc_atom(
-    name = "SkRiveSlide_hdr",
-    hdrs = ["SkRiveSlide.h"],
-    visibility = ["//:__subpackages__"],
-    deps = [
-        ":Slide_hdr",
-        "//experimental/skrive/include:SkRive_hdr",
-    ],
-)
-
-generated_cc_atom(
-    name = "SkRiveSlide_src",
-    srcs = ["SkRiveSlide.cpp"],
-    visibility = ["//:__subpackages__"],
-    deps = [
-        ":SkRiveSlide_hdr",
-        "//include/core:SkCanvas_hdr",
-        "//include/core:SkStream_hdr",
     ],
 )
 
@@ -434,7 +414,6 @@ generated_cc_atom(
         ":ParticlesSlide_hdr",
         ":SKPSlide_hdr",
         ":SampleSlide_hdr",
-        ":SkRiveSlide_hdr",
         ":SkSLDebuggerSlide_hdr",
         ":SkSLSlide_hdr",
         ":SkottieSlide_hdr",
@@ -454,6 +433,7 @@ generated_cc_atom(
         "//misc/cpp:imgui_stdlib_hdr",
         "//src/core:SkAutoPixmapStorage_hdr",
         "//src/core:SkColorSpacePriv_hdr",
+        "//src/core:SkGlyphRun_hdr",
         "//src/core:SkImagePriv_hdr",
         "//src/core:SkMD5_hdr",
         "//src/core:SkOSFile_hdr",

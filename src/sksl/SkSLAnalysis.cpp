@@ -160,6 +160,31 @@ public:
     using INHERITED = ProgramVisitor;
 };
 
+class ReturnsNonOpaqueColorVisitor : public ProgramVisitor {
+public:
+    ReturnsNonOpaqueColorVisitor() {}
+
+    bool visitStatement(const Statement& s) override {
+        if (s.is<ReturnStatement>()) {
+            const Expression* e = s.as<ReturnStatement>().expression().get();
+            bool knownOpaque = e && e->type().slotCount() == 4 &&
+                               ConstantFolder::GetConstantValueForVariable(*e)
+                                               ->getConstantValue(/*n=*/3)
+                                               .value_or(0) == 1;
+            return !knownOpaque;
+        }
+        return INHERITED::visitStatement(s);
+    }
+
+    bool visitExpression(const Expression& e) override {
+        // No need to recurse into expressions, these can never contain return statements
+        return false;
+    }
+
+    using INHERITED = ProgramVisitor;
+    using INHERITED::visitProgramElement;
+};
+
 // Visitor that counts the number of nodes visited
 class NodeCountVisitor : public ProgramVisitor {
 public:
@@ -224,7 +249,7 @@ private:
 class TrivialErrorReporter : public ErrorReporter {
 public:
     ~TrivialErrorReporter() override { this->reportPendingErrors({}); }
-    void handleError(std::string_view, PositionInfo) override {}
+    void handleError(std::string_view, Position) override {}
 };
 
 // This isn't actually using ProgramVisitor, because it only considers a subset of the fields for
@@ -249,8 +274,8 @@ public:
                 VariableReference& varRef = expr.as<VariableReference>();
                 const Variable* var = varRef.variable();
                 if (var->modifiers().fFlags & (Modifiers::kConst_Flag | Modifiers::kUniform_Flag)) {
-                    fErrors->error(expr.fLine, "cannot modify immutable variable '" +
-                                               SkSL::String(var->name()) + "'");
+                    fErrors->error(expr.fPosition, "cannot modify immutable variable '" +
+                            std::string(var->name()) + "'");
                 } else {
                     SkASSERT(fAssignedVar == nullptr);
                     fAssignedVar = &varRef;
@@ -275,7 +300,7 @@ public:
                 break;
 
             default:
-                fErrors->error(expr.fLine, "cannot assign to this expression");
+                fErrors->error(expr.fPosition, "cannot assign to this expression");
                 break;
         }
     }
@@ -287,7 +312,7 @@ private:
             SkASSERT(idx >= SwizzleComponent::X && idx <= SwizzleComponent::W);
             int bit = 1 << idx;
             if (bits & bit) {
-                fErrors->error(swizzle.fLine,
+                fErrors->error(swizzle.fPosition,
                                "cannot write to the same swizzle field more than once");
                 break;
             }
@@ -346,6 +371,11 @@ bool Analysis::CallsColorTransformIntrinsics(const Program& program) {
     return false;
 }
 
+bool Analysis::ReturnsOpaqueColor(const FunctionDefinition& function) {
+    ReturnsNonOpaqueColorVisitor visitor;
+    return !visitor.visitProgramElement(function);
+}
+
 bool Analysis::DetectVarDeclarationWithoutScope(const Statement& stmt, ErrorReporter* errors) {
     // A variable declaration can create either a lone VarDeclaration or an unscoped Block
     // containing multiple VarDeclaration statements. We need to detect either case.
@@ -373,8 +403,8 @@ bool Analysis::DetectVarDeclarationWithoutScope(const Statement& stmt, ErrorRepo
     // Report an error.
     SkASSERT(var);
     if (errors) {
-        errors->error(stmt.fLine, "variable '" + SkSL::String(var->name()) +
-                                  "' must be created in a scope");
+        errors->error(stmt.fPosition, "variable '" + std::string(var->name()) +
+                "' must be created in a scope");
     }
     return true;
 }
@@ -401,7 +431,8 @@ bool Analysis::UpdateVariableRefKind(Expression* expr,
     }
     if (!info.fAssignedVar) {
         if (errors) {
-            errors->error(expr->fLine, "can't assign to expression '" + expr->description() + "'");
+            errors->error(expr->fPosition, "can't assign to expression '" + expr->description() +
+                    "'");
         }
         return false;
     }
@@ -511,7 +542,7 @@ public:
         if (e.is<IndexExpression>()) {
             const IndexExpression& i = e.as<IndexExpression>();
             if (!Analysis::IsConstantIndexExpression(*i.index(), &fLoopIndices)) {
-                fErrors.error(i.fLine, "index expression must be constant");
+                fErrors.error(i.fPosition, "index expression must be constant");
                 return true;
             }
         }

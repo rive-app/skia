@@ -58,15 +58,32 @@ public:
                    destinationBytesPerImage: bufferRowBytes * srcRect.height()];
     }
 
+    void copyFromBuffer(id<MTLBuffer> buffer,
+                        size_t bufferOffset,
+                        size_t bufferRowBytes,
+                        id<MTLTexture> texture,
+                        SkIRect dstRect,
+                        unsigned int dstLevel) {
+        [(*fCommandEncoder) copyFromBuffer: buffer
+                              sourceOffset: bufferOffset
+                         sourceBytesPerRow: bufferRowBytes
+                       sourceBytesPerImage: bufferRowBytes * dstRect.height()
+                                sourceSize: MTLSizeMake(dstRect.width(), dstRect.height(), 1)
+                                 toTexture: texture
+                          destinationSlice: 0
+                          destinationLevel: dstLevel
+                         destinationOrigin: MTLOriginMake(dstRect.left(), dstRect.top(), 0)];
+    }
+
     void endEncoding() {
         [(*fCommandEncoder) endEncoding];
     }
 
 private:
     BlitCommandEncoder(const skgpu::Gpu* gpu, sk_cfp<id<MTLBlitCommandEncoder>> encoder)
-        : Resource(gpu), fCommandEncoder(std::move(encoder)) {}
+        : Resource(gpu, Ownership::kOwned), fCommandEncoder(std::move(encoder)) {}
 
-    void onFreeGpuData() override {
+    void freeGpuData() override {
         fCommandEncoder.reset();
     }
 

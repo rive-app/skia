@@ -40,7 +40,7 @@ public:
                                      sk_sp<SkCustomMeshSpecification> spec,
                                      sk_sp<GrColorSpaceXform> colorSpaceXform,
                                      const SkMatrix& viewMatrix,
-                                     const skstd::optional<SkPMColor4f>& color,
+                                     const std::optional<SkPMColor4f>& color,
                                      bool needsLocalCoords) {
         return arena->make([&](void* ptr) {
             return new (ptr) CustomMeshGP(std::move(spec),
@@ -89,17 +89,15 @@ private:
                           const SkSL::Context& context)
                     : fSelf(self), fBuilder(builder), fMainName(mainName), fContext(context) {}
 
-            using String = SkSL::String;
-
-            String declareUniform(const SkSL::VarDeclaration* decl) override {
+            std::string declareUniform(const SkSL::VarDeclaration* decl) override {
                 SK_ABORT("uniforms not allowed");
             }
 
-            String getMangledName(const char* name) override {
-                return String(fBuilder->getMangledFunctionName(name).c_str());
+            std::string getMangledName(const char* name) override {
+                return std::string(fBuilder->getMangledFunctionName(name).c_str());
             }
 
-            String getMainName() override { return fMainName; }
+            std::string getMainName() override { return fMainName; }
 
             void defineFunction(const char* decl, const char* body, bool isMain) override {
                 fBuilder->emitFunction(decl, body);
@@ -117,23 +115,23 @@ private:
                 fBuilder->definitionAppend(declaration);
             }
 
-            String sampleShader(int index, String coords) override {
+            std::string sampleShader(int index, std::string coords) override {
                 SK_ABORT("No children allowed.");
             }
 
-            String sampleColorFilter(int index, String color) override {
+            std::string sampleColorFilter(int index, std::string color) override {
                 SK_ABORT("No children allowed.");
             }
 
-            String sampleBlender(int index, String src, String dst) override {
+            std::string sampleBlender(int index, std::string src, std::string dst) override {
                 SK_ABORT("No children allowed.");
             }
 
-            String toLinearSrgb(String color) override {
+            std::string toLinearSrgb(std::string color) override {
                 SK_ABORT("Color transform intrinsics not allowed.");
             }
 
-            String fromLinearSrgb(String Color) override {
+            std::string fromLinearSrgb(std::string Color) override {
                 SK_ABORT("Color transform intrinsics not allowed.");
             }
 
@@ -291,7 +289,7 @@ private:
     CustomMeshGP(sk_sp<SkCustomMeshSpecification>    spec,
                  sk_sp<GrColorSpaceXform>            colorSpaceXform,
                  const SkMatrix&                     viewMatrix,
-                 const skstd::optional<SkPMColor4f>& color,
+                 const std::optional<SkPMColor4f>& color,
                  bool                                needsLocalCoords)
             : INHERITED(kVerticesGP_ClassID)
             , fSpec(std::move(spec))
@@ -659,7 +657,7 @@ GrProcessorSet::Analysis CustomMeshOp::finalize(const GrCaps& caps,
 }
 
 GrGeometryProcessor* CustomMeshOp::makeGP(SkArenaAlloc* arena) {
-    skstd::optional<SkPMColor4f> color;
+    std::optional<SkPMColor4f> color;
     if (fIgnoreSpecColor || !SkCustomMeshSpecificationPriv::HasColors(*fSpecification)) {
         color.emplace(fColor);
     }

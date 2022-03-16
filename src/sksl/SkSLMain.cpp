@@ -9,7 +9,6 @@
 #include "include/core/SkGraphics.h"
 #include "include/core/SkStream.h"
 #include "include/private/SkStringView.h"
-#include "include/private/SkTOptional.h"
 #include "src/core/SkCpu.h"
 #include "src/core/SkOpts.h"
 #include "src/opts/SkChecksum_opts.h"
@@ -31,6 +30,7 @@
 
 #include <fstream>
 #include <limits.h>
+#include <optional>
 #include <stdarg.h>
 #include <stdio.h>
 
@@ -106,7 +106,7 @@ static bool consume_suffix(std::string* str, const char suffix[]) {
 // Given a string containing an SkSL program, searches for a #pragma settings comment, like so:
 //    /*#pragma settings Default Sharpen*/
 // The passed-in Settings object will be updated accordingly. Any number of options can be provided.
-static bool detect_shader_settings(const SkSL::String& text,
+static bool detect_shader_settings(const std::string& text,
                                    SkSL::Program::Settings* settings,
                                    const SkSL::ShaderCaps** caps,
                                    std::unique_ptr<SkSL::SkVMDebugTrace>* debugTrace) {
@@ -122,7 +122,7 @@ static bool detect_shader_settings(const SkSL::String& text,
 
         const char* settingsEnd = strstr(settingsPtr, "*/");
         if (settingsEnd != nullptr) {
-            SkSL::String settingsText{settingsPtr, size_t(settingsEnd - settingsPtr)};
+            std::string settingsText{settingsPtr, size_t(settingsEnd - settingsPtr)};
 
             // Apply settings as requested. Since they can come in any order, repeat until we've
             // consumed them all.
@@ -266,7 +266,7 @@ static void show_usage() {
            "--nosettings: ignore /*#pragma settings*/ comments\n");
 }
 
-static bool set_flag(skstd::optional<bool>* flag, const char* name, bool value) {
+static bool set_flag(std::optional<bool>* flag, const char* name, bool value) {
     if (flag->has_value()) {
         printf("%s flag was specified multiple times\n", name);
         return false;
@@ -279,7 +279,7 @@ static bool set_flag(skstd::optional<bool>* flag, const char* name, bool value) 
  * Handle a single input.
  */
 ResultCode processCommand(const std::vector<std::string>& args) {
-    skstd::optional<bool> honorSettings;
+    std::optional<bool> honorSettings;
     std::vector<std::string> paths;
     for (size_t i = 1; i < args.size(); ++i) {
         const std::string& arg = args[i];
@@ -327,7 +327,7 @@ ResultCode processCommand(const std::vector<std::string>& args) {
     }
 
     std::ifstream in(inputPath);
-    SkSL::String text((std::istreambuf_iterator<char>(in)),
+    std::string text((std::istreambuf_iterator<char>(in)),
                        std::istreambuf_iterator<char>());
     if (in.rdstate()) {
         printf("error reading '%s'\n", inputPath.c_str());
@@ -409,7 +409,7 @@ ResultCode processCommand(const std::vector<std::string>& args) {
                     }
                     // Convert the string-stream to a SPIR-V disassembly.
                     spvtools::SpirvTools tools(SPV_ENV_VULKAN_1_0);
-                    const SkSL::String& spirv(assembly.str());
+                    const std::string& spirv(assembly.str());
                     std::string disassembly;
                     if (!tools.Disassemble((const uint32_t*)spirv.data(),
                                            spirv.size() / 4, &disassembly)) {
@@ -455,25 +455,23 @@ ResultCode processCommand(const std::vector<std::string>& args) {
                 [](SkSL::Compiler&, SkSL::Program& program, SkSL::OutputStream& out) {
                     class Callbacks : public SkSL::PipelineStage::Callbacks {
                     public:
-                        using String = SkSL::String;
-
-                        String getMangledName(const char* name) override {
-                            return String(name) + "_0";
+                        std::string getMangledName(const char* name) override {
+                            return std::string(name) + "_0";
                         }
 
-                        String declareUniform(const SkSL::VarDeclaration* decl) override {
+                        std::string declareUniform(const SkSL::VarDeclaration* decl) override {
                             fOutput += decl->description();
-                            return String(decl->var().name());
+                            return std::string(decl->var().name());
                         }
 
                         void defineFunction(const char* decl,
                                             const char* body,
                                             bool /*isMain*/) override {
-                            fOutput += String(decl) + "{" + body + "}";
+                            fOutput += std::string(decl) + "{" + body + "}";
                         }
 
                         void declareFunction(const char* decl) override {
-                            fOutput += String(decl) + ";";
+                            fOutput += std::string(decl) + ";";
                         }
 
                         void defineStruct(const char* definition) override {
@@ -484,27 +482,29 @@ ResultCode processCommand(const std::vector<std::string>& args) {
                             fOutput += declaration;
                         }
 
-                        String sampleShader(int index, String coords) override {
-                            return "child_" + skstd::to_string(index) + ".eval(" + coords + ")";
+                        std::string sampleShader(int index, std::string coords) override {
+                            return "child_" + std::to_string(index) + ".eval(" + coords + ")";
                         }
 
-                        String sampleColorFilter(int index, String color) override {
-                            return "child_" + skstd::to_string(index) + ".eval(" + color + ")";
+                        std::string sampleColorFilter(int index, std::string color) override {
+                            return "child_" + std::to_string(index) + ".eval(" + color + ")";
                         }
 
-                        String sampleBlender(int index, String src, String dst) override {
-                            return "child_" + skstd::to_string(index) + ".eval(" + src + ", " +
+                        std::string sampleBlender(int index,
+                                                  std::string src,
+                                                  std::string dst) override {
+                            return "child_" + std::to_string(index) + ".eval(" + src + ", " +
                                    dst + ")";
                         }
 
-                        String toLinearSrgb(String color) override {
+                        std::string toLinearSrgb(std::string color) override {
                             return "toLinearSrgb(" + color + ")";
                         }
-                        String fromLinearSrgb(String color) override {
+                        std::string fromLinearSrgb(std::string color) override {
                             return "fromLinearSrgb(" + color + ")";
                         }
 
-                        String fOutput;
+                        std::string fOutput;
                     };
                     // The .stage output looks almost like valid SkSL, but not quite.
                     // The PipelineStageGenerator bridges the gap between the SkSL in `program`,
@@ -539,7 +539,7 @@ ResultCode processCommand(const std::vector<std::string>& args) {
         std::string baseName = base_name(inputPath, "", ".sksl");
         SkSL::StringStream buffer;
         dehydrator.finish(buffer);
-        const SkSL::String& data = buffer.str();
+        const std::string& data = buffer.str();
         out.printf("static uint8_t SKSL_INCLUDE_%s[] = {", baseName.c_str());
         for (size_t i = 0; i < data.length(); ++i) {
             out.printf("%s%d,", dehydrator.prefixAtOffset(i), uint8_t(data[i]));

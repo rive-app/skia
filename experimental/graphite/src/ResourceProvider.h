@@ -17,6 +17,7 @@
 #include "src/gpu/ResourceKey.h"
 
 struct SkSamplingOptions;
+class SkShaderCodeDictionary;
 
 namespace skgpu {
 
@@ -26,7 +27,10 @@ class Caps;
 class GlobalCache;
 class Gpu;
 class GraphicsPipeline;
+class GraphiteResourceKey;
+class ResourceCache;
 class Sampler;
+class SingleOwner;
 class Texture;
 class TextureInfo;
 
@@ -39,8 +43,14 @@ public:
     sk_sp<GraphicsPipeline> findOrCreateGraphicsPipeline(const GraphicsPipelineDesc&,
                                                          const RenderPassDesc&);
 
-    sk_sp<Texture> findOrCreateTexture(SkISize, const TextureInfo&);
+    sk_sp<Texture> findOrCreateScratchTexture(SkISize, const TextureInfo&);
     virtual sk_sp<Texture> createWrappedTexture(const BackendTexture&) = 0;
+
+    sk_sp<Texture> findOrCreateDepthStencilAttachment(SkISize dimensions,
+                                                      const TextureInfo&);
+
+    sk_sp<Texture> findOrCreateDiscardableMSAAAttachment(SkISize dimensions,
+                                                         const TextureInfo&);
 
     sk_sp<Buffer> findOrCreateBuffer(size_t size, BufferType type, PrioritizeGpuReads);
 
@@ -51,7 +61,7 @@ public:
     SkShaderCodeDictionary* shaderCodeDictionary() const;
 
 protected:
-    ResourceProvider(const Gpu* gpu, sk_sp<GlobalCache>);
+    ResourceProvider(const Gpu* gpu, sk_sp<GlobalCache>, SingleOwner* singleOwner);
 
     const Gpu* fGpu;
 
@@ -64,6 +74,10 @@ private:
     virtual sk_sp<Sampler> createSampler(const SkSamplingOptions&,
                                          SkTileMode xTileMode,
                                          SkTileMode yTileMode) = 0;
+
+    sk_sp<Texture> findOrCreateTextureWithKey(SkISize dimensions,
+                                              const TextureInfo& info,
+                                              const GraphiteResourceKey& key);
 
     class GraphicsPipelineCache {
     public:
@@ -87,6 +101,7 @@ private:
         ResourceProvider* fResourceProvider;
     };
 
+    sk_sp<ResourceCache> fResourceCache;
     sk_sp<GlobalCache> fGlobalCache;
 
     // Cache of GraphicsPipelines

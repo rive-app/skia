@@ -5,11 +5,16 @@
  * found in the LICENSE file.
  */
 
+#include "src/shaders/gradients/SkSweepGradient.h"
+
 #include "include/private/SkFloatingPoint.h"
 #include "src/core/SkRasterPipeline.h"
 #include "src/core/SkReadBuffer.h"
 #include "src/core/SkWriteBuffer.h"
-#include "src/shaders/gradients/SkSweepGradient.h"
+
+#ifdef SK_ENABLE_SKSL
+#include "src/core/SkKeyHelpers.h"
+#endif
 
 SkSweepGradient::SkSweepGradient(const SkPoint& center, SkScalar t0, SkScalar t1,
                                  const Descriptor& desc)
@@ -103,4 +108,20 @@ std::unique_ptr<GrFragmentProcessor> SkSweepGradient::asFragmentProcessor(
     return GrGradientShader::MakeSweep(*this, args);
 }
 
+#endif
+
+#ifdef SK_ENABLE_SKSL
+void SkSweepGradient::addToKey(const SkKeyContext& keyContext,
+                               SkPaintParamsKeyBuilder* builder,
+                               SkPipelineData* pipelineData) const {
+    GradientShaderBlocks::GradientData data(kSweep_GradientType,
+                                            fCenter, { 0.0f, 0.0f },
+                                            0.0, 0.0f,
+                                            fTileMode,
+                                            fColorCount,
+                                            fOrigColors4f,
+                                            fOrigPos);
+
+    GradientShaderBlocks::AddToKey(keyContext, builder, pipelineData, data);
+}
 #endif

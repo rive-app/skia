@@ -78,7 +78,7 @@ static const bool gPrintSKSL = false;
 static const bool gPrintHLSL = false;
 
 static gr_cp<ID3DBlob> GrCompileHLSLShader(GrD3DGpu* gpu,
-                                           const SkSL::String& hlsl,
+                                           const std::string& hlsl,
                                            SkSL::ProgramKind kind) {
     TRACE_EVENT0("skia.shaders", "driver_compile_shader");
     const char* compileTarget = nullptr;
@@ -114,7 +114,7 @@ static gr_cp<ID3DBlob> GrCompileHLSLShader(GrD3DGpu* gpu,
 
 bool GrD3DPipelineStateBuilder::loadHLSLFromCache(SkReadBuffer* reader, gr_cp<ID3DBlob> shaders[]) {
 
-    SkSL::String hlsl[kGrShaderTypeCount];
+    std::string hlsl[kGrShaderTypeCount];
     SkSL::Program::Inputs inputs[kGrShaderTypeCount];
 
     if (!GrPersistentCacheUtils::UnpackCachedShaders(reader, hlsl, inputs, kGrShaderTypeCount)) {
@@ -135,14 +135,14 @@ bool GrD3DPipelineStateBuilder::loadHLSLFromCache(SkReadBuffer* reader, gr_cp<ID
 
 gr_cp<ID3DBlob> GrD3DPipelineStateBuilder::compileD3DProgram(
         SkSL::ProgramKind kind,
-        const SkSL::String& sksl,
+        const std::string& sksl,
         const SkSL::Program::Settings& settings,
         SkSL::Program::Inputs* outInputs,
-        SkSL::String* outHLSL) {
+        std::string* outHLSL) {
 #ifdef SK_DEBUG
-    SkSL::String src = SkShaderUtils::PrettyPrint(sksl);
+    std::string src = SkShaderUtils::PrettyPrint(sksl);
 #else
-    const SkSL::String& src = sksl;
+    const std::string& src = sksl;
 #endif
 
     std::unique_ptr<SkSL::Program> program = fGpu->shaderCompiler()->convertProgram(
@@ -267,60 +267,60 @@ static void setup_vertex_input_layout(const GrGeometryProcessor& geomProc,
     }
 }
 
-static D3D12_BLEND blend_coeff_to_d3d_blend(GrBlendCoeff coeff) {
+static D3D12_BLEND blend_coeff_to_d3d_blend(skgpu::BlendCoeff coeff) {
     switch (coeff) {
-    case kZero_GrBlendCoeff:
+    case skgpu::BlendCoeff::kZero:
         return D3D12_BLEND_ZERO;
-    case kOne_GrBlendCoeff:
+    case skgpu::BlendCoeff::kOne:
         return D3D12_BLEND_ONE;
-    case kSC_GrBlendCoeff:
+    case skgpu::BlendCoeff::kSC:
         return D3D12_BLEND_SRC_COLOR;
-    case kISC_GrBlendCoeff:
+    case skgpu::BlendCoeff::kISC:
         return D3D12_BLEND_INV_SRC_COLOR;
-    case kDC_GrBlendCoeff:
+    case skgpu::BlendCoeff::kDC:
         return D3D12_BLEND_DEST_COLOR;
-    case kIDC_GrBlendCoeff:
+    case skgpu::BlendCoeff::kIDC:
         return D3D12_BLEND_INV_DEST_COLOR;
-    case kSA_GrBlendCoeff:
+    case skgpu::BlendCoeff::kSA:
         return D3D12_BLEND_SRC_ALPHA;
-    case kISA_GrBlendCoeff:
+    case skgpu::BlendCoeff::kISA:
         return D3D12_BLEND_INV_SRC_ALPHA;
-    case kDA_GrBlendCoeff:
+    case skgpu::BlendCoeff::kDA:
         return D3D12_BLEND_DEST_ALPHA;
-    case kIDA_GrBlendCoeff:
+    case skgpu::BlendCoeff::kIDA:
         return D3D12_BLEND_INV_DEST_ALPHA;
-    case kConstC_GrBlendCoeff:
+    case skgpu::BlendCoeff::kConstC:
         return D3D12_BLEND_BLEND_FACTOR;
-    case kIConstC_GrBlendCoeff:
+    case skgpu::BlendCoeff::kIConstC:
         return D3D12_BLEND_INV_BLEND_FACTOR;
-    case kS2C_GrBlendCoeff:
+    case skgpu::BlendCoeff::kS2C:
         return D3D12_BLEND_SRC1_COLOR;
-    case kIS2C_GrBlendCoeff:
+    case skgpu::BlendCoeff::kIS2C:
         return D3D12_BLEND_INV_SRC1_COLOR;
-    case kS2A_GrBlendCoeff:
+    case skgpu::BlendCoeff::kS2A:
         return D3D12_BLEND_SRC1_ALPHA;
-    case kIS2A_GrBlendCoeff:
+    case skgpu::BlendCoeff::kIS2A:
         return D3D12_BLEND_INV_SRC1_ALPHA;
-    case kIllegal_GrBlendCoeff:
+    case skgpu::BlendCoeff::kIllegal:
         return D3D12_BLEND_ZERO;
     }
     SkUNREACHABLE;
 }
 
-static D3D12_BLEND blend_coeff_to_d3d_blend_for_alpha(GrBlendCoeff coeff) {
+static D3D12_BLEND blend_coeff_to_d3d_blend_for_alpha(skgpu::BlendCoeff coeff) {
     switch (coeff) {
         // Force all srcColor used in alpha slot to alpha version.
-    case kSC_GrBlendCoeff:
+    case skgpu::BlendCoeff::kSC:
         return D3D12_BLEND_SRC_ALPHA;
-    case kISC_GrBlendCoeff:
+    case skgpu::BlendCoeff::kISC:
         return D3D12_BLEND_INV_SRC_ALPHA;
-    case kDC_GrBlendCoeff:
+    case skgpu::BlendCoeff::kDC:
         return D3D12_BLEND_DEST_ALPHA;
-    case kIDC_GrBlendCoeff:
+    case skgpu::BlendCoeff::kIDC:
         return D3D12_BLEND_INV_DEST_ALPHA;
-    case kS2C_GrBlendCoeff:
+    case skgpu::BlendCoeff::kS2C:
         return D3D12_BLEND_SRC1_ALPHA;
-    case kIS2C_GrBlendCoeff:
+    case skgpu::BlendCoeff::kIS2C:
         return D3D12_BLEND_INV_SRC1_ALPHA;
 
     default:
@@ -329,13 +329,13 @@ static D3D12_BLEND blend_coeff_to_d3d_blend_for_alpha(GrBlendCoeff coeff) {
 }
 
 
-static D3D12_BLEND_OP blend_equation_to_d3d_op(GrBlendEquation equation) {
+static D3D12_BLEND_OP blend_equation_to_d3d_op(skgpu::BlendEquation equation) {
     switch (equation) {
-    case kAdd_GrBlendEquation:
+    case skgpu::BlendEquation::kAdd:
         return D3D12_BLEND_OP_ADD;
-    case kSubtract_GrBlendEquation:
+    case skgpu::BlendEquation::kSubtract:
         return D3D12_BLEND_OP_SUBTRACT;
-    case kReverseSubtract_GrBlendEquation:
+    case skgpu::BlendEquation::kReverseSubtract:
         return D3D12_BLEND_OP_REV_SUBTRACT;
     default:
         SkUNREACHABLE;
@@ -348,10 +348,10 @@ static void fill_in_blend_state(const GrPipeline& pipeline, D3D12_BLEND_DESC* bl
 
     const GrXferProcessor::BlendInfo& blendInfo = pipeline.getXferProcessor().getBlendInfo();
 
-    GrBlendEquation equation = blendInfo.fEquation;
-    GrBlendCoeff srcCoeff = blendInfo.fSrcBlend;
-    GrBlendCoeff dstCoeff = blendInfo.fDstBlend;
-    bool blendOff = GrBlendShouldDisable(equation, srcCoeff, dstCoeff);
+    skgpu::BlendEquation equation = blendInfo.fEquation;
+    skgpu::BlendCoeff srcCoeff = blendInfo.fSrcBlend;
+    skgpu::BlendCoeff dstCoeff = blendInfo.fDstBlend;
+    bool blendOff = skgpu::BlendShouldDisable(equation, srcCoeff, dstCoeff);
 
     auto& rtBlend = blendDesc->RenderTarget[0];
     rtBlend.BlendEnable = !blendOff;
@@ -587,12 +587,12 @@ std::unique_ptr<GrD3DPipelineState> GrD3DPipelineStateBuilder::finalize() {
         // We successfully loaded and compiled HLSL
     } else {
         SkSL::Program::Inputs inputs[kGrShaderTypeCount];
-        SkSL::String* sksl[kGrShaderTypeCount] = {
+        std::string* sksl[kGrShaderTypeCount] = {
             &fVS.fCompilerString,
             &fFS.fCompilerString,
         };
-        SkSL::String cached_sksl[kGrShaderTypeCount];
-        SkSL::String hlsl[kGrShaderTypeCount];
+        std::string cached_sksl[kGrShaderTypeCount];
+        std::string hlsl[kGrShaderTypeCount];
 
         if (kSKSL_Tag == shaderType) {
             if (GrPersistentCacheUtils::UnpackCachedShaders(&reader, cached_sksl, inputs,
@@ -704,4 +704,3 @@ sk_sp<GrD3DPipeline> GrD3DPipelineStateBuilder::MakeComputePipeline(GrD3DGpu* gp
 
     return GrD3DPipeline::Make(std::move(pipelineState));
 }
-

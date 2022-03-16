@@ -14,34 +14,45 @@
 
 namespace skgpu {
 
-Surface_Graphite::Surface_Graphite(sk_sp<Device> device)
+Surface::Surface(sk_sp<Device> device)
         : SkSurface_Base(device->width(), device->height(), &device->surfaceProps())
         , fDevice(std::move(device)) {
 }
 
-Surface_Graphite::~Surface_Graphite() {}
+Surface::~Surface() {}
 
-SkCanvas* Surface_Graphite::onNewCanvas() { return new SkCanvas(fDevice); }
+Recorder* Surface::onGetRecorder() {
+    return fDevice->recorder();
+}
 
-sk_sp<SkSurface> Surface_Graphite::onNewSurface(const SkImageInfo& ii) {
+SkCanvas* Surface::onNewCanvas() { return new SkCanvas(fDevice); }
+
+sk_sp<SkSurface> Surface::onNewSurface(const SkImageInfo& ii) {
     return MakeGraphite(fDevice->recorder(), ii);
 }
 
-sk_sp<SkImage> Surface_Graphite::onNewImageSnapshot(const SkIRect* subset) {
+sk_sp<SkImage> Surface::onNewImageSnapshot(const SkIRect* subset) {
     SkImageInfo ii = subset ? this->imageInfo().makeDimensions(subset->size())
                             : this->imageInfo();
 
-    return sk_sp<Image_Graphite>(new Image_Graphite(ii));
+    // TODO: create a real proxy view
+    sk_sp<TextureProxy> proxy(new TextureProxy(ii.dimensions(), {}));
+    TextureProxyView tpv(std::move(proxy));
+
+    return sk_sp<Image>(new Image(tpv, ii.colorInfo()));
 }
 
-void Surface_Graphite::onWritePixels(const SkPixmap&, int x, int y) {}
-bool Surface_Graphite::onCopyOnWrite(ContentChangeMode) { return true; }
+void Surface::onWritePixels(const SkPixmap& pixmap, int x, int y) {
+    fDevice->writePixels(pixmap, x, y);
+}
 
-bool Surface_Graphite::onReadPixels(Context* context,
-                                    Recorder* recorder,
-                                    const SkPixmap& dst,
-                                    int srcX,
-                                    int srcY) {
+bool Surface::onCopyOnWrite(ContentChangeMode) { return true; }
+
+bool Surface::onReadPixels(Context* context,
+                           Recorder* recorder,
+                           const SkPixmap& dst,
+                           int srcX,
+                           int srcY) {
     return fDevice->readPixels(context, recorder, dst, srcX, srcY);
 }
 

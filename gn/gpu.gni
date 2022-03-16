@@ -47,7 +47,6 @@ skia_gpu_sources = [
   "$_src/gpu/GrBackendUtils.cpp",
   "$_src/gpu/GrBackendUtils.h",
   "$_src/gpu/GrBaseContextPriv.h",
-  "$_src/gpu/GrBlend.h",
   "$_src/gpu/GrBuffer.h",
   "$_src/gpu/GrBufferAllocPool.cpp",
   "$_src/gpu/GrBufferAllocPool.h",
@@ -205,8 +204,6 @@ skia_gpu_sources = [
   "$_src/gpu/GrSurfaceProxy.h",
   "$_src/gpu/GrSurfaceProxyPriv.h",
   "$_src/gpu/GrSurfaceProxyView.h",
-  "$_src/gpu/GrSwizzle.cpp",
-  "$_src/gpu/GrSwizzle.h",
   "$_src/gpu/GrTTopoSort.h",
   "$_src/gpu/GrTestUtils.cpp",
   "$_src/gpu/GrTestUtils.h",
@@ -321,7 +318,6 @@ skia_gpu_sources = [
 
   # tessellate
   "$_src/gpu/tessellate/AffineMatrix.h",
-  "$_src/gpu/tessellate/PatchWriter.cpp",
   "$_src/gpu/tessellate/PatchWriter.h",
   "$_src/gpu/tessellate/PathCurveTessellator.cpp",
   "$_src/gpu/tessellate/PathCurveTessellator.h",
@@ -352,6 +348,8 @@ skia_gpu_sources = [
   "$_src/gpu/text/GrAtlasManager.h",
   "$_src/gpu/text/GrDistanceFieldAdjustTable.cpp",
   "$_src/gpu/text/GrDistanceFieldAdjustTable.h",
+  "$_src/gpu/text/GrGlyphVector.cpp",
+  "$_src/gpu/text/GrGlyphVector.h",
   "$_src/gpu/text/GrSDFMaskFilter.cpp",
   "$_src/gpu/text/GrSDFMaskFilter.h",
   "$_src/gpu/text/GrSDFTControl.cpp",
@@ -816,11 +814,14 @@ skia_native_gpu_sources = [
 skia_shared_gpu_sources = [
   "$_include/gpu/ShaderErrorHandler.h",
   "$_include/private/SingleOwner.h",
+  "$_src/gpu/Blend.h",
   "$_src/gpu/BufferWriter.h",
   "$_src/gpu/KeyBuilder.h",
   "$_src/gpu/ResourceKey.cpp",
   "$_src/gpu/ResourceKey.h",
   "$_src/gpu/ShaderErrorHandler.cpp",
+  "$_src/gpu/Swizzle.cpp",
+  "$_src/gpu/Swizzle.h",
 
   # tessellate
   "$_src/gpu/tessellate/CullTest.h",

@@ -38,6 +38,8 @@ class GrRecordingContext;
 class GrRenderTarget;
 enum GrSurfaceOrigin: int;
 
+namespace skgpu { class Recorder; }
+
 /** \class SkSurface
     SkSurface is responsible for managing the pixels that a canvas draws into. The pixels can be
     allocated either in CPU memory (a raster surface) or on the GPU (a GrRenderTarget surface).
@@ -517,6 +519,12 @@ public:
      */
     GrRecordingContext* recordingContext();
 
+    /** Returns the recorder being used by the SkSurface.
+
+        @return the recorder, if available; nullptr otherwise
+     */
+    skgpu::Recorder* recorder();
+
 #if SK_SUPPORT_GPU
     enum BackendHandleAccess {
         kFlushRead_BackendHandleAccess,    //!< back-end object is readable
@@ -910,6 +918,19 @@ public:
     };
 
 #if SK_SUPPORT_GPU
+    /** If a surface is GPU texture backed, is being drawn with MSAA, and there is a resolve
+        texture, this call will insert a resolve command into the stream of gpu commands. In order
+        for the resolve to actually have an effect, the work still needs to be flushed and submitted
+        to the GPU after recording the resolve command. If a resolve is not supported or the
+        SkSurface has no dirty work to resolve, then this call is a no-op.
+
+        This call is most useful when the SkSurface is created by wrapping a single sampled gpu
+        texture, but asking Skia to render with MSAA. If the client wants to use the wrapped texture
+        outside of Skia, the only way to trigger a resolve is either to call this command or use
+        SkSurface::flush.
+     */
+    void resolveMSAA();
+
     /** Issues pending SkSurface commands to the GPU-backed API objects and resolves any SkSurface
         MSAA. A call to GrDirectContext::submit is always required to ensure work is actually sent
         to the gpu. Some specific API details:

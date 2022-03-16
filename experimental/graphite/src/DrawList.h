@@ -9,7 +9,6 @@
 #define skgpu_DrawList_DEFINED
 
 #include "include/core/SkPaint.h"
-#include "include/private/SkTOptional.h"
 #include "src/core/SkTBlockList.h"
 
 #include "experimental/graphite/src/DrawOrder.h"
@@ -18,6 +17,7 @@
 #include "experimental/graphite/src/geom/Transform_graphite.h"
 
 #include <limits>
+#include <optional>
 
 class SkPath;
 class SkShader;
@@ -125,38 +125,18 @@ public:
     // DrawOrder cannot overflow since they are always less than or equal to the number of draws.
     static constexpr int kMaxDraws = std::numeric_limits<uint16_t>::max();
 
-    // NOTE: All path rendering functions, e.g. [fill|stroke|...]Path() that take a Shape
-    // draw using the same underlying techniques regardless of the shape's type. If a Shape has
-    // a type matching a simpler primitive technique or coverage AA, the caller must explicitly
-    // invoke it to use that rendering algorithms.
-    //
-    // Additionally, DrawList requires that all Transforms passed to its draw calls be valid and
-    // assert as much; invalid transforms should be detected at the Device level or similar.
-
-    void stencilAndFillPath(const Transform& localToDevice,
-                            const Shape& shape,
-                            const Clip& clip,
-                            DrawOrder ordering,
-                            const PaintParams* paint);
-
-    void fillConvexPath(const Transform& localToDevice,
-                        const Shape& shape,
-                        const Clip& clip,
-                        DrawOrder ordering,
-                        const PaintParams* paint);
-
-    void strokePath(const Transform& localToDevice,
+    // DrawList requires that all Transforms be valid and asserts as much; invalid transforms should
+    // be detected at the Device level or similar. The provided Renderer must be compatible with the
+    // 'shape' and 'stroke' parameters. If the renderer uses coverage AA, 'ordering' must have a
+    // compressed painters order that reflects that. If the renderer uses stencil, the 'ordering'
+    // must have a valid stencil index as well.
+    void recordDraw(const Renderer& renderer,
+                    const Transform& localToDevice,
                     const Shape& shape,
-                    const StrokeParams& stroke,
                     const Clip& clip,
                     DrawOrder ordering,
-                    const PaintParams* paint);
-
-    // TODO: fill[R]Rect, stroke[R]Rect (will need to support per-edge aa and arbitrary quads)
-    //       fillImage (per-edge aa and arbitrary quad, only if this fast path is required)
-    //       dashPath(feasible for general paths?)
-    //       dash[R]Rect(only if general dashPath isn't viable)
-    //       dashLine(only if general or rrect version aren't viable)
+                    const PaintParams* paint,
+                    const StrokeParams* stroke);
 
     int drawCount() const { return fDraws.count(); }
     int renderStepCount() const { return fRenderStepCount; }
@@ -172,8 +152,8 @@ private:
         Clip      fClip;
         DrawOrder fOrder;
 
-        skstd::optional<PaintParams>  fPaintParams; // Not present implies depth-only draw
-        skstd::optional<StrokeParams> fStrokeParams; // Not present implies fill
+        std::optional<PaintParams>  fPaintParams; // Not present implies depth-only draw
+        std::optional<StrokeParams> fStrokeParams; // Not present implies fill
 
         Draw(const Renderer& renderer, const Transform& transform, const Shape& shape,
              const Clip& clip, DrawOrder order, const PaintParams* paint,
@@ -183,8 +163,8 @@ private:
                 , fShape(shape)
                 , fClip(clip)
                 , fOrder(order)
-                , fPaintParams(paint ? skstd::optional<PaintParams>(*paint) : skstd::nullopt)
-                , fStrokeParams(stroke ? skstd::optional<StrokeParams>(*stroke) : skstd::nullopt) {}
+                , fPaintParams(paint ? std::optional<PaintParams>(*paint) : std::nullopt)
+                , fStrokeParams(stroke ? std::optional<StrokeParams>(*stroke) : std::nullopt) {}
     };
 
     // The returned Transform reference remains valid for the lifetime of the DrawList.

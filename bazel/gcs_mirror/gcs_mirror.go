@@ -44,7 +44,7 @@ func main() {
 	if (*url != "" && *sha256Hash == "") || (*url == "" && *sha256Hash != "") {
 		flag.Usage()
 		fatalf("Must set both of or non of --url and --sha256")
-	} else if !*jsonFromStdin {
+	} else if *url == "" && *sha256Hash == "" && !*jsonFromStdin {
 		fatalf("Must specify --url and --sha256 or --json")
 	}
 
@@ -66,6 +66,7 @@ func main() {
 		if err := processOne(workDir, *url, *sha256Hash); err != nil {
 			fatalf("Error while processing entry: %s", err)
 		}
+		fmt.Printf("https://storage.googleapis.com/skia-world-readable/bazel/%s.tar.gz\n", *sha256Hash)
 	}
 }
 

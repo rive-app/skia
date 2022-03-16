@@ -38,16 +38,15 @@ RUN if [ ! -z "${PATCH_REF}" ] ; then cd /tmp/skia/skia \
 
 RUN cd /tmp/skia/skia \
   && gclient sync \
-  && ./bin/fetch-gn
+  && ./bin/fetch-gn \
+  && ./bin/activate-emsdk
 
 # PathKit should be in /tmp/skia/skia/out/pathkit/
 RUN /tmp/skia/skia/modules/pathkit/compile.sh
 
 # CanvasKit should be in /tmp/skia/skia/out/canvaskit_wasm
-RUN /tmp/skia/skia/modules/canvaskit/compile.sh
-
-# Debugger should be in /tmp/skia/skia/out/debugger_wasm
-RUN /tmp/skia/skia/experimental/wasm-skp-debugger/compile.sh
+# We also want to include the debugger bindings to run debugger.skia.org
+RUN /tmp/skia/skia/modules/canvaskit/compile.sh enable_debugger
 
 RUN cd /tmp/skia/skia && git rev-parse HEAD > /tmp/VERSION
 
@@ -70,5 +69,3 @@ COPY --from=builder /tmp/skia/skia/out/pathkit/pathkit* /tmp/pathkit/
 COPY --from=builder /tmp/skia/skia/out/canvaskit_wasm/canvaskit* /tmp/canvaskit/
 
 COPY --from=builder /tmp/skia/skia/modules/canvaskit/npm_build/types/index.d.ts /tmp/canvaskit/canvaskit.d.ts
-
-COPY --from=builder /tmp/skia/skia/out/debugger_wasm/debugger* /tmp/debugger/

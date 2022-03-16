@@ -16,8 +16,10 @@
 
 class SkStrikeForGPU;
 struct SkGlyphPositionRoundingSpec;
+class SkPath;
+class SkDrawable;
 
-// SkSourceGlyphBuffer is the source of glyphs between the different stages of character drawing.
+// SkSourceGlyphBuffer is the source of glyphs between the different stages of glyph drawing.
 // It starts with the glyphs and positions from the SkGlyphRun as the first source. When glyphs
 // are reject by a stage they become the source for the next stage.
 class SkSourceGlyphBuffer {
@@ -99,39 +101,27 @@ public:
         SkDEBUGCODE(fTag = kPackedID);
         return *this;
     }
-    SkGlyphVariant& operator= (SkGlyph* glyph) {
+    SkGlyphVariant& operator= (const SkGlyph* glyph) {
         fV.glyph = glyph;
         SkDEBUGCODE(fTag = kGlyph);
         return *this;
-
-    }
-    SkGlyphVariant& operator= (const SkPath* path) {
-        fV.path = path;
-        SkDEBUGCODE(fTag = kPath);
-        return *this;
     }
 
-    SkGlyph* glyph() const {
+    const SkGlyph* glyph() const {
         SkASSERT(fTag == kGlyph);
         return fV.glyph;
-    }
-    const SkPath* path() const {
-        SkASSERT(fTag == kPath);
-        return fV.path;
     }
     SkPackedGlyphID packedID() const {
         SkASSERT(fTag == kPackedID);
         return fV.packedID;
     }
 
-    operator SkPackedGlyphID() const { return this->packedID(); }
-    operator SkGlyph*()        const { return this->glyph();    }
-    operator const SkPath*()   const { return this->path();     }
+    operator SkPackedGlyphID()  const { return this->packedID(); }
+    operator const SkGlyph*()   const { return this->glyph();    }
 
 private:
     union {
-        SkGlyph* glyph;
-        const SkPath* path;
+        const SkGlyph* glyph;
         SkPackedGlyphID packedID;
     } fV;
 
@@ -140,13 +130,12 @@ private:
         kEmpty,
         kPackedID,
         kGlyph,
-        kPath
     } fTag{kEmpty};
 #endif
 };
 
-// A buffer for converting SkPackedGlyph to SkGlyph* or SkPath*. Initially the buffer contains
-// SkPackedGlyphIDs, but those are used to lookup SkGlyph*/SkPath* which are then copied over the
+// A buffer for converting SkPackedGlyph to SkGlyph*s. Initially the buffer contains
+// SkPackedGlyphIDs, but those are used to lookup SkGlyph*s which are then copied over the
 // SkPackedGlyphIDs.
 class SkDrawableGlyphBuffer {
 public:
@@ -166,7 +155,7 @@ public:
     //
     // The positions are calculated integer positions in devices space, and the mapping of the
     // the source origin through the initial matrix is returned. It is given that these positions
-    // are only reused when the blob is translated by an integral amount. Thus the shifted
+    // are only reused when the blob is translated by an integral amount. Thus, the shifted
     // positions are given by the following equation where (ix, iy) is the integer positions of
     // the glyph, initialMappedOrigin is (0,0) in source mapped to the device using the initial
     // matrix, and newMappedOrigin is (0,0) in source mapped to the device using the current
@@ -190,42 +179,31 @@ public:
         return SkZip<SkGlyphVariant, SkPoint>{fInputSize, fMultiBuffer.get(), fPositions};
     }
 
-    // Store the glyph in the next drawable slot, using the position information located at index
-    // from.
-    void push_back(SkGlyph* glyph, size_t from) {
+    // Store the glyph in the next slot, using the position information located at index from.
+    void accept(SkGlyph* glyph, size_t from) {
         SkASSERT(fPhase == kProcess);
-        SkASSERT(fDrawableSize <= from);
-        fPositions[fDrawableSize] = fPositions[from];
-        fMultiBuffer[fDrawableSize] = glyph;
-        fDrawableSize++;
+        SkASSERT(fAcceptedSize <= from);
+        fPositions[fAcceptedSize] = fPositions[from];
+        fMultiBuffer[fAcceptedSize] = glyph;
+        fAcceptedSize++;
     }
 
-    // Store the path in the next drawable slot, using the position information located at index
-    // from.
-    void push_back(const SkPath* path, size_t from) {
-        SkASSERT(fPhase == kProcess);
-        SkASSERT(fDrawableSize <= from);
-        fPositions[fDrawableSize] = fPositions[from];
-        fMultiBuffer[fDrawableSize] = path;
-        fDrawableSize++;
-    }
-
-    // The result after a series of push_backs of drawable SkGlyph* or SkPath*.
-    SkZip<SkGlyphVariant, SkPoint> drawable() {
+    // The result after a series of `accept` of accepted SkGlyph* or SkPath*.
+    SkZip<SkGlyphVariant, SkPoint> accepted() {
         SkASSERT(fPhase == kProcess);
         SkDEBUGCODE(fPhase = kDraw);
-        return SkZip<SkGlyphVariant, SkPoint>{fDrawableSize, fMultiBuffer.get(), fPositions};
+        return SkZip<SkGlyphVariant, SkPoint>{fAcceptedSize, fMultiBuffer.get(), fPositions};
     }
 
-    bool drawableIsEmpty() const {
+    bool empty() const {
         SkASSERT(fPhase == kProcess || fPhase == kDraw);
-        return fDrawableSize == 0;
+        return fAcceptedSize == 0;
     }
 
     void reset();
 
     template <typename Fn>
-    void forEachGlyphID(Fn&& fn) {
+    void forEachInput(Fn&& fn) {
         for (auto [i, packedID, pos] : SkMakeEnumerate(this->input())) {
             fn(i, packedID.packedID(), pos);
         }
@@ -234,7 +212,7 @@ public:
 private:
     size_t fMaxSize{0};
     size_t fInputSize{0};
-    size_t fDrawableSize{0};
+    size_t fAcceptedSize{0};
     SkAutoTArray<SkGlyphVariant> fMultiBuffer;
     SkAutoTMalloc<SkPoint> fPositions;
 

@@ -94,8 +94,8 @@ public:
                                                     int sampleCnt,
                                                     GrMipmapped,
                                                     GrProtected,
-                                                    GrSwizzle readSwizzle,
-                                                    GrSwizzle writeSwizzle,
+                                                    skgpu::Swizzle readSwizzle,
+                                                    skgpu::Swizzle writeSwizzle,
                                                     GrSurfaceOrigin,
                                                     SkBudgeted,
                                                     const SkSurfaceProps&);
@@ -518,7 +518,7 @@ public:
     void drawSlug(SkCanvas*,
                   const GrClip* clip,
                   const SkMatrixProvider& viewMatrix,
-                  GrSlug* slugPtr);
+                  const GrSlug* slugPtr);
 
     /**
      * Adds the necessary signal and wait semaphores and adds the passed in SkDrawable to the

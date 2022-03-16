@@ -34,11 +34,12 @@ class GrStrikeCache;
 class GrSubRun;
 
 class SkMatrixProvider;
+class SkStrikeClient;
 class SkSurfaceProps;
 class SkTextBlob;
 class SkTextBlobRunIterator;
 
-namespace skgpu { namespace v1 { class SurfaceDrawContext; }}
+namespace skgpu::v1 { class SurfaceDrawContext; }
 
 // -- GrAtlasSubRun --------------------------------------------------------------------------------
 // GrAtlasSubRun is the API that AtlasTextOp uses to generate vertex data for drawing.
@@ -105,6 +106,20 @@ public:
                       skgpu::v1::SurfaceDrawContext*) const = 0;
 
     virtual const GrBlobSubRun* blobCast() const;
+    void flatten(SkWriteBuffer& buffer) const;
+    static GrSubRunOwner MakeFromBuffer(const GrTextReferenceFrame* referenceFrame,
+                                        SkReadBuffer& buffer,
+                                        GrSubRunAllocator* alloc,
+                                        const SkStrikeClient* client);
+
+    // Size hint for unflattening this run. If this is accurate, it will help with the allocation
+    // of the slug. If it's off then there may be more allocations needed to unflatten.
+    virtual int unflattenSize() const = 0;
+
+protected:
+    enum SubRunType : int;
+    virtual SubRunType subRunType() const = 0;
+    virtual void doFlatten(SkWriteBuffer& buffer) const = 0;
 
 private:
     friend class GrSubRunList;
@@ -168,7 +183,6 @@ private:
 //
 class GrTextBlob final : public GrTextReferenceFrame, public SkGlyphRunPainterInterface {
 public:
-
     // Key is not used as part of a hash map, so the hash is never taken. It's only used in a
     // list search using operator =().
     struct Key {
@@ -244,17 +258,22 @@ private:
                SkColor initialLuminance);
 
     // Methods to satisfy SkGlyphRunPainterInterface
-    void processDeviceMasks(const SkZip<SkGlyphVariant, SkPoint>& drawables,
+    void processDeviceMasks(const SkZip<SkGlyphVariant, SkPoint>& accepted,
                             sk_sp<SkStrike>&& strike) override;
-    void processSourcePaths(const SkZip<SkGlyphVariant, SkPoint>& drawables,
+    void processSourcePaths(const SkZip<SkGlyphVariant, SkPoint>& accepted,
                             const SkFont& runFont,
+                            const SkDescriptor& descriptor,
                             SkScalar strikeToSourceScale) override;
-    void processSourceSDFT(const SkZip<SkGlyphVariant, SkPoint>& drawables,
+    void processSourceDrawables(const SkZip<SkGlyphVariant, SkPoint>& accepted,
+                                const SkFont& runFont,
+                                const SkDescriptor& descriptor,
+                                SkScalar strikeToSourceScale) override;
+    void processSourceSDFT(const SkZip<SkGlyphVariant, SkPoint>& accepted,
                            sk_sp<SkStrike>&& strike,
                            SkScalar strikeToSourceScale,
                            const SkFont& runFont,
                            const GrSDFTMatrixRange& matrixRange) override;
-    void processSourceMasks(const SkZip<SkGlyphVariant, SkPoint>& drawables,
+    void processSourceMasks(const SkZip<SkGlyphVariant, SkPoint>& accepted,
                             sk_sp<SkStrike>&& strike,
                             SkScalar strikeToSourceScale) override;
 
@@ -291,15 +310,20 @@ public:
                            const SkMatrixProvider& viewMatrix,
                            const SkGlyphRunList&,
                            const SkPaint&);
-    void processDeviceMasks(const SkZip<SkGlyphVariant, SkPoint>& drawables,
+    void processDeviceMasks(const SkZip<SkGlyphVariant, SkPoint>& accepted,
                             sk_sp<SkStrike>&& strike) override;
-    void processSourceMasks(const SkZip<SkGlyphVariant, SkPoint>& drawables,
+    void processSourceMasks(const SkZip<SkGlyphVariant, SkPoint>& accepted,
                             sk_sp<SkStrike>&& strike,
                             SkScalar strikeToSourceScale) override;
-    void processSourcePaths(const SkZip<SkGlyphVariant, SkPoint>& drawables,
+    void processSourcePaths(const SkZip<SkGlyphVariant, SkPoint>& accepted,
                             const SkFont& runFont,
+                            const SkDescriptor& descriptor,
                             SkScalar strikeToSourceScale) override;
-    void processSourceSDFT(const SkZip<SkGlyphVariant, SkPoint>& drawables,
+    void processSourceDrawables(const SkZip<SkGlyphVariant, SkPoint>& accepted,
+                                const SkFont& runFont,
+                                const SkDescriptor& descriptor,
+                                SkScalar strikeToSourceScale) override;
+    void processSourceSDFT(const SkZip<SkGlyphVariant, SkPoint>& accepted,
                            sk_sp<SkStrike>&& strike,
                            SkScalar strikeToSourceScale,
                            const SkFont& runFont,
@@ -319,4 +343,11 @@ private:
     const SkPaint& fPaint;
 };
 
+namespace skgpu::v1 {
+sk_sp<GrSlug> MakeSlug(const SkMatrixProvider& drawMatrix,
+                       const SkGlyphRunList& glyphRunList,
+                       const SkPaint& paint,
+                       const GrSDFTControl& control,
+                       SkGlyphRunListPainter* painter);
+}  // namespace skgpu::v1
 #endif  // GrTextBlob_DEFINED

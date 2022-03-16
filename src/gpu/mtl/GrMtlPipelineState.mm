@@ -115,7 +115,7 @@ void GrMtlPipelineState::setTextures(const GrGeometryProcessor& geomProc,
 }
 
 void GrMtlPipelineState::setDrawState(GrMtlRenderCommandEncoder* renderCmdEncoder,
-                                      const GrSwizzle& writeSwizzle,
+                                      const skgpu::Swizzle& writeSwizzle,
                                       const GrXferProcessor& xferProcessor) {
     this->bindUniforms(renderCmdEncoder);
     this->setBlendConstants(renderCmdEncoder, writeSwizzle, xferProcessor);
@@ -158,16 +158,16 @@ void GrMtlPipelineState::setRenderTargetState(SkISize colorAttachmentDimensions,
 }
 
 void GrMtlPipelineState::setBlendConstants(GrMtlRenderCommandEncoder* renderCmdEncoder,
-                                           const GrSwizzle& swizzle,
+                                           const skgpu::Swizzle& swizzle,
                                            const GrXferProcessor& xferProcessor) {
     if (!renderCmdEncoder) {
         return;
     }
 
     const GrXferProcessor::BlendInfo& blendInfo = xferProcessor.getBlendInfo();
-    GrBlendCoeff srcCoeff = blendInfo.fSrcBlend;
-    GrBlendCoeff dstCoeff = blendInfo.fDstBlend;
-    if (GrBlendCoeffRefsConstant(srcCoeff) || GrBlendCoeffRefsConstant(dstCoeff)) {
+    skgpu::BlendCoeff srcCoeff = blendInfo.fSrcBlend;
+    skgpu::BlendCoeff dstCoeff = blendInfo.fDstBlend;
+    if (skgpu::BlendCoeffRefsConstant(srcCoeff) || skgpu::BlendCoeffRefsConstant(dstCoeff)) {
         // Swizzle the blend to match what the shader will output.
         SkPMColor4f blendConst = swizzle.applyTo(blendInfo.fBlendConstant);
 

@@ -21,8 +21,12 @@
 #include "src/core/SkVM.h"
 #include "src/core/SkVMBlitter.h"
 #include "src/shaders/SkColorFilterShader.h"
+#include "src/shaders/SkColorShader.h"
 
 #include <cinttypes>
+
+#define SK_BLITTER_TRACE_IS_SKVM
+#include "src/utils/SkBlitterTrace.h"
 
 namespace {
 
@@ -109,17 +113,26 @@ namespace {
 
             float rate = 0.0f;
             switch (dst.colorType()) {
-                case kARGB_4444_SkColorType:    rate =   1/15.0f; break;
-                case   kRGB_565_SkColorType:    rate =   1/63.0f; break;
-                case    kGray_8_SkColorType:
-                case  kRGB_888x_SkColorType:
+                case kARGB_4444_SkColorType:
+                    rate = 1 / 15.0f;
+                    break;
+                case kRGB_565_SkColorType:
+                    rate = 1 / 63.0f;
+                    break;
+                case kGray_8_SkColorType:
+                case kRGB_888x_SkColorType:
                 case kRGBA_8888_SkColorType:
                 case kBGRA_8888_SkColorType:
-                case kSRGBA_8888_SkColorType:   rate =  1/255.0f; break;
+                case kSRGBA_8888_SkColorType:
+                case kR8_unorm_SkColorType:
+                    rate = 1 / 255.0f;
+                    break;
                 case kRGB_101010x_SkColorType:
                 case kRGBA_1010102_SkColorType:
                 case kBGR_101010x_SkColorType:
-                case kBGRA_1010102_SkColorType: rate = 1/1023.0f; break;
+                case kBGRA_1010102_SkColorType:
+                    rate = 1 / 1023.0f;
+                    break;
 
                 case kUnknown_SkColorType:
                 case kAlpha_8_SkColorType:
@@ -131,7 +144,8 @@ namespace {
                 case kA16_unorm_SkColorType:
                 case kR16G16_float_SkColorType:
                 case kR16G16_unorm_SkColorType:
-                case kR16G16B16A16_unorm_SkColorType: return c;
+                case kR16G16B16A16_unorm_SkColorType:
+                    return c;
             }
 
             // See SkRasterPipeline dither stage.
@@ -167,29 +181,6 @@ namespace {
             c.g = clamp(c.g, 0.0f, c.a);
             c.b = clamp(c.b, 0.0f, c.a);
             return c;
-        }
-    };
-
-    // This is similar to using SkShaders::Color(paint.getColor4f(), nullptr),
-    // but uses the blitter-provided paint color uniforms instead of pushing its own.
-    struct PaintColorShader : public SkShaderBase {
-        explicit PaintColorShader(bool isOpaque) : fIsOpaque(isOpaque) {}
-
-        const bool fIsOpaque;
-
-        // Only created here temporarily... never serialized.
-        Factory      getFactory() const override { return nullptr; }
-        const char* getTypeName() const override { return "PaintColorShader"; }
-
-        bool isOpaque() const override { return fIsOpaque; }
-
-        skvm::Color onProgram(skvm::Builder*,
-                              skvm::Coord, skvm::Coord, skvm::Color paint,
-                              const SkMatrixProvider&, const SkMatrix*, const SkColorInfo&,
-                              skvm::Uniforms*, SkArenaAlloc*) const override {
-            // Incoming `paint` is unpremul in the destination color space,
-            // so we just need to premul it.
-            return premul(paint);
         }
     };
 }  // namespace
@@ -233,11 +224,11 @@ SkVMBlitter::Params SkVMBlitter::EffectiveParams(const SkPixmap& device,
     }
     SkASSERT(!paint.getColorFilter());
 
-    // If there's no explicit shader, the paint color is the shader,
+    // If there's no explicit shader, SkColorShader is the shader,
     // but if there is a shader, it's modulated by the paint alpha.
     sk_sp<SkShader> shader = paint.refShader();
     if (!shader) {
-        shader = sk_make_sp<PaintColorShader>(paint.getColor4f().isOpaque());
+        shader = sk_make_sp<SkColor4Shader>(paint.getColor4f(), nullptr);
     } else if (paint.getAlphaf() < 1.0f) {
         shader = sk_make_sp<SkColorFilterShader>(std::move(shader),
                                                  paint.getAlphaf(),
@@ -621,7 +612,7 @@ skvm::Program* SkVMBlitter::buildProgram(Coverage coverage) {
               "%zu, prev was %zu", fUniforms.buf.size(), prev);
 
     skvm::Program program = builder.done(DebugName(key).c_str());
-    if (false) {
+    if ((false)) {
         static std::atomic<int> missed{0},
                                 total{0};
         if (!program.hasJIT()) {
@@ -657,8 +648,10 @@ void SkVMBlitter::blitH(int x, int y, int w) {
     skvm::Program* blit_h = this->buildProgram(Coverage::Full);
     this->updateUniforms(x+w, y);
     if (const void* sprite = this->isSprite(x,y)) {
+        SK_BLITTER_TRACE_STEP(blitH1, true, /*scanlines=*/1, /*pixels=*/w);
         blit_h->eval(w, fUniforms.buf.data(), fDevice.addr(x,y), sprite);
     } else {
+        SK_BLITTER_TRACE_STEP(blitH2, true, /*scanlines=*/1, /*pixels=*/w);
         blit_h->eval(w, fUniforms.buf.data(), fDevice.addr(x,y));
     }
 }
@@ -667,7 +660,9 @@ void SkVMBlitter::blitAntiH(int x, int y, const SkAlpha cov[], const int16_t run
     skvm::Program* blit_anti_h = this->buildProgram(Coverage::UniformF);
     skvm::Program* blit_h = this->buildProgram(Coverage::Full);
 
+    SK_BLITTER_TRACE_STEP(blitAntiH, true, /*scanlines=*/1ul, /*pixels=*/0ul);
     for (int16_t run = *runs; run > 0; run = *runs) {
+        SK_BLITTER_TRACE_STEP_ACCUMULATE(blitAntiH, /*pixels=*/run);
         const SkAlpha coverage = *cov;
         if (coverage != 0x00) {
             this->updateUniforms(x+run, y);
@@ -717,6 +712,11 @@ void SkVMBlitter::blitMask(const SkMask& mask, const SkIRect& clip) {
 
     SkASSERT(program);
     if (program) {
+        SK_BLITTER_TRACE_STEP(blitMask,
+                           true,
+                           /*scanlines=*/clip.height(),
+                           /*pixels=*/clip.width() * clip.height());
+
         for (int y = clip.top(); y < clip.bottom(); y++) {
              int x = clip.left(),
                  w = clip.width();

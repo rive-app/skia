@@ -14,11 +14,11 @@
 #include "include/gpu/GrDriverBugWorkarounds.h"
 #include "include/private/GrTypesPriv.h"
 #include "src/core/SkCompressedDataUtils.h"
-#include "src/gpu/GrBlend.h"
+#include "src/gpu/Blend.h"
 #include "src/gpu/GrSamplerState.h"
 #include "src/gpu/GrShaderCaps.h"
 #include "src/gpu/GrSurfaceProxy.h"
-#include "src/gpu/GrSwizzle.h"
+#include "src/gpu/Swizzle.h"
 
 class GrBackendFormat;
 class GrBackendRenderTarget;
@@ -75,6 +75,13 @@ public:
     // an MSAA-render-to-texture extension: Any render target we create internally will use the
     // extension, and any wrapped render target is the client's responsibility.
     bool msaaResolvesAutomatically() const { return fMSAAResolvesAutomatically; }
+    // If true then when doing MSAA draws, we will prefer to discard the msaa attachment on load
+    // and stores. The use of this feature for specific draws depends on the render target having a
+    // resolve attachment, and if we need to load previous data the resolve attachment must be
+    // usable as an input attachment/texture. Otherwise we will just write out and store the msaa
+    // attachment like normal.
+    // This flag is similar to enabling gl render to texture for msaa rendering.
+    bool preferDiscardableMSAAAttachment() const { return fPreferDiscardableMSAAAttachment; }
     bool halfFloatVertexAttributeSupport() const { return fHalfFloatVertexAttributeSupport; }
 
     // Primitive restart functionality is core in ES 3.0, but using it will cause slowdowns on some
@@ -142,10 +149,10 @@ public:
         return kAdvancedCoherent_BlendEquationSupport == fBlendEquationSupport;
     }
 
-    bool isAdvancedBlendEquationDisabled(GrBlendEquation equation) const {
-        SkASSERT(GrBlendEquationIsAdvanced(equation));
+    bool isAdvancedBlendEquationDisabled(skgpu::BlendEquation equation) const {
+        SkASSERT(skgpu::BlendEquationIsAdvanced(equation));
         SkASSERT(this->advancedBlendEquationSupport());
-        return SkToBool(fAdvBlendEqDisableFlags & (1 << equation));
+        return SkToBool(fAdvBlendEqDisableFlags & (1 << static_cast<int>(equation)));
     }
 
     // On some GPUs it is a performance win to disable blending instead of doing src-over with a src
@@ -439,16 +446,16 @@ public:
     bool clampToBorderSupport() const { return fClampToBorderSupport; }
 
     /**
-     * Returns the GrSwizzle to use when sampling or reading back from a texture with the passed in
-     * GrBackendFormat and GrColorType.
+     * Returns the skgpu::Swizzle to use when sampling or reading back from a texture with the
+     * passed in GrBackendFormat and GrColorType.
      */
-    GrSwizzle getReadSwizzle(const GrBackendFormat& format, GrColorType colorType) const;
+    skgpu::Swizzle getReadSwizzle(const GrBackendFormat& format, GrColorType colorType) const;
 
     /**
-     * Returns the GrSwizzle to use when writing colors to a surface with the passed in
+     * Returns the skgpu::Swizzle to use when writing colors to a surface with the passed in
      * GrBackendFormat and GrColorType.
      */
-    virtual GrSwizzle getWriteSwizzle(const GrBackendFormat&, GrColorType) const = 0;
+    virtual skgpu::Swizzle getWriteSwizzle(const GrBackendFormat&, GrColorType) const = 0;
 
     virtual uint64_t computeFormatKey(const GrBackendFormat&) const = 0;
 
@@ -544,6 +551,7 @@ protected:
     bool fConservativeRasterSupport                  : 1;
     bool fWireframeSupport                           : 1;
     bool fMSAAResolvesAutomatically                  : 1;
+    bool fPreferDiscardableMSAAAttachment            : 1;
     bool fUsePrimitiveRestart                        : 1;
     bool fPreferClientSideDynamicBuffers             : 1;
     bool fPreferFullscreenClears                     : 1;
@@ -589,7 +597,7 @@ protected:
 
     BlendEquationSupport fBlendEquationSupport;
     uint32_t fAdvBlendEqDisableFlags;
-    static_assert(kLast_GrBlendEquation < 32);
+    static_assert(static_cast<int>(skgpu::BlendEquation::kLast) < 32);
 
     uint32_t fMapBufferFlags;
     int fBufferMapThreshold;
@@ -629,7 +637,7 @@ private:
                                                          const GrBackendFormat& srcFormat,
                                                          GrColorType dstColorType) const = 0;
 
-    virtual GrSwizzle onGetReadSwizzle(const GrBackendFormat&, GrColorType) const = 0;
+    virtual skgpu::Swizzle onGetReadSwizzle(const GrBackendFormat&, GrColorType) const = 0;
 
     virtual GrDstSampleFlags onGetDstSampleFlagsForProxy(const GrRenderTargetProxy*) const {
         return GrDstSampleFlags::kNone;

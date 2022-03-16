@@ -83,7 +83,6 @@ generated_cc_atom(
     visibility = ["//:__subpackages__"],
     deps = [
         "//include/private:SkMalloc_hdr",
-        "//include/private:SkTOptional_hdr",
         "//include/private:SkTemplates_hdr",
         "//src/core:SkMathPriv_hdr",
     ],
@@ -271,7 +270,6 @@ generated_cc_atom(
     hdrs = ["SkJSON.h"],
     visibility = ["//:__subpackages__"],
     deps = [
-        "//include/core:SkStringView_hdr",
         "//include/core:SkTypes_hdr",
         "//include/private:SkNoncopyable_hdr",
         "//include/private:SkTo_hdr",
@@ -661,4 +659,24 @@ generated_cc_atom(
         ":SkVMVisualizer_hdr",
         "//src/core:SkStreamPriv_hdr",
     ],
+)
+
+generated_cc_atom(
+    name = "SkBlitterTraceCommon_hdr",
+    hdrs = ["SkBlitterTraceCommon.h"],
+    visibility = ["//:__subpackages__"],
+    deps = [":SkCycles_hdr"],
+)
+
+generated_cc_atom(
+    name = "SkBlitterTrace_hdr",
+    hdrs = ["SkBlitterTrace.h"],
+    visibility = ["//:__subpackages__"],
+    deps = [":SkBlitterTraceCommon_hdr"],
+)
+
+generated_cc_atom(
+    name = "SkCycles_hdr",
+    hdrs = ["SkCycles.h"],
+    visibility = ["//:__subpackages__"],
 )

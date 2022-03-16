@@ -10,7 +10,7 @@
 
 #include "src/gpu/GrGpu.h"
 
-#include "dawn/webgpu_cpp.h"
+#include "webgpu/webgpu_cpp.h"
 #include "src/core/SkLRUCache.h"
 #include "src/gpu/GrFinishCallbacks.h"
 #include "src/gpu/GrProgramDesc.h"
@@ -101,11 +101,11 @@ public:
     void appendCommandBuffer(wgpu::CommandBuffer commandBuffer);
 
     void waitOnAllBusyStagingBuffers();
-    SkSL::String SkSLToSPIRV(const char* shaderString,
-                             SkSL::ProgramKind,
-                             uint32_t rtFlipOffset,
-                             SkSL::Program::Inputs*);
-    wgpu::ShaderModule createShaderModule(const SkSL::String& spirvSource);
+    std::string SkSLToSPIRV(const char* shaderString,
+                            SkSL::ProgramKind,
+                            uint32_t rtFlipOffset,
+                            SkSL::Program::Inputs*);
+    wgpu::ShaderModule createShaderModule(const std::string& spirvSource);
 
 private:
     GrDawnGpu(GrDirectContext*, const GrContextOptions&, const wgpu::Device&);

@@ -14,12 +14,12 @@
 #include "experimental/graphite/src/Caps.h"
 #include "experimental/graphite/src/CommandBuffer.h"
 #include "experimental/graphite/src/ContextPriv.h"
-#include "experimental/graphite/src/ContextUtils.h"
 #include "experimental/graphite/src/DrawBufferManager.h"
 #include "experimental/graphite/src/DrawWriter.h"
 #include "experimental/graphite/src/GlobalCache.h"
 #include "experimental/graphite/src/Gpu.h"
 #include "experimental/graphite/src/GraphicsPipeline.h"
+#include "experimental/graphite/src/RecorderPriv.h"
 #include "experimental/graphite/src/Renderer.h"
 #include "experimental/graphite/src/ResourceProvider.h"
 #include "experimental/graphite/src/Sampler.h"
@@ -28,8 +28,9 @@
 #include "experimental/graphite/src/UniformManager.h"
 #include "experimental/graphite/src/geom/Shape.h"
 #include "experimental/graphite/src/geom/Transform_graphite.h"
-#include "include/private/SkShaderCodeDictionary.h"
+#include "src/core/SkKeyContext.h"
 #include "src/core/SkKeyHelpers.h"
+#include "src/core/SkShaderCodeDictionary.h"
 #include "src/core/SkUniformData.h"
 
 #if GRAPHITE_TEST_UTILS
@@ -235,7 +236,8 @@ DEF_GRAPHITE_TEST_FOR_CONTEXTS(CommandBufferTest, reporter, context) {
     gpu->testingOnly_startCapture();
 #endif
     auto recorder = context->makeRecorder();
-    auto resourceProvider = recorder->resourceProvider();
+    SkKeyContext keyContext(recorder.get());
+    auto resourceProvider = recorder->priv().resourceProvider();
     auto commandBuffer = resourceProvider->createCommandBuffer();
 
     SkISize textureSize = { kTextureWidth, kTextureHeight };
@@ -253,13 +255,18 @@ DEF_GRAPHITE_TEST_FOR_CONTEXTS(CommandBufferTest, reporter, context) {
     TextureInfo textureInfo;
 #endif
 
-    SkPaintParamsKey key = CreateKey(SkBackend::kGraphite,
-                                     ShaderCombo::ShaderType::kSolidColor,
-                                     SkTileMode::kClamp,
-                                     SkBlendMode::kSrc);
+    SkUniquePaintParamsID uniqueID;
+    {
+        auto dict = keyContext.dict();
 
-    auto dict = resourceProvider->shaderCodeDictionary();
-    auto entry = dict->findOrCreate(key);
+        SkPaintParamsKeyBuilder builder(dict, SkBackend::kGraphite);
+
+        uniqueID = CreateKey(keyContext,
+                             &builder,
+                             ShaderCombo::ShaderType::kSolidColor,
+                             SkTileMode::kClamp,
+                             SkBlendMode::kSrc);
+    }
 
     auto target = sk_sp<TextureProxy>(new TextureProxy(textureSize, textureInfo));
     REPORTER_ASSERT(reporter, target);
@@ -271,7 +278,7 @@ DEF_GRAPHITE_TEST_FOR_CONTEXTS(CommandBufferTest, reporter, context) {
     renderPassDesc.fClearColor = { 1, 0, 0, 1 }; // red
 
     target->instantiate(resourceProvider);
-    DrawBufferManager bufferMgr(resourceProvider, 4);
+    DrawBufferManager bufferMgr(resourceProvider, gpu->caps()->requiredUniformBufferAlignment());
 
     TextureInfo depthStencilInfo =
             gpu->caps()->getDefaultDepthStencilTextureInfo(DepthStencilFlags::kDepthStencil,
@@ -281,7 +288,7 @@ DEF_GRAPHITE_TEST_FOR_CONTEXTS(CommandBufferTest, reporter, context) {
     renderPassDesc.fDepthStencilAttachment.fLoadOp = LoadOp::kDiscard;
     renderPassDesc.fDepthStencilAttachment.fStoreOp = StoreOp::kDiscard;
     sk_sp<Texture> depthStencilTexture =
-            resourceProvider->findOrCreateTexture(textureSize, depthStencilInfo);
+            resourceProvider->findOrCreateDepthStencilAttachment(textureSize, depthStencilInfo);
 
     // Create Sampler -- for now, just to test creation
     sk_sp<Sampler> sampler = resourceProvider->findOrCreateCompatibleSampler(
@@ -302,7 +309,7 @@ DEF_GRAPHITE_TEST_FOR_CONTEXTS(CommandBufferTest, reporter, context) {
 
     auto draw = [&](const RenderStep* step, std::vector<RectAndColor> draws) {
         GraphicsPipelineDesc pipelineDesc;
-        pipelineDesc.setProgram(step, entry->uniqueID());
+        pipelineDesc.setProgram(step, uniqueID);
         drawWriter.newPipelineState(step->primitiveType(),
                                     step->vertexStride(),
                                     step->instanceStride());

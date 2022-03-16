@@ -54,6 +54,10 @@ GrRecordingContext* SkSurface_Base::onGetRecordingContext() {
     return nullptr;
 }
 
+skgpu::Recorder* SkSurface_Base::onGetRecorder() {
+    return nullptr;
+}
+
 #if SK_SUPPORT_GPU
 GrBackendTexture SkSurface_Base::onGetBackendTexture(BackendHandleAccess) {
     return GrBackendTexture(); // invalid
@@ -318,6 +322,10 @@ GrRecordingContext* SkSurface::recordingContext() {
     return asSB(this)->onGetRecordingContext();
 }
 
+skgpu::Recorder* SkSurface::recorder() {
+    return asSB(this)->onGetRecorder();
+}
+
 bool SkSurface::wait(int numSemaphores, const GrBackendSemaphore* waitSemaphores,
                      bool deleteSemaphoresAfterWait) {
     return asSB(this)->onWait(numSemaphores, waitSemaphores, deleteSemaphoresAfterWait);
@@ -354,6 +362,10 @@ bool SkSurface::replaceBackendTexture(const GrBackendTexture& backendTexture,
                                       ReleaseContext releaseContext) {
     return asSB(this)->onReplaceBackendTexture(backendTexture, origin, mode, textureReleaseProc,
                                                releaseContext);
+}
+
+void SkSurface::resolveMSAA() {
+    asSB(this)->onResolveMSAA();
 }
 
 GrSemaphoresSubmitted SkSurface::flush(BackendSurfaceAccess access, const GrFlushInfo& flushInfo) {

@@ -3,9 +3,13 @@ generate:
 	bazelisk build @org_skia_go_infra//bazel/gazelle:gazelle_cpp
 	cd .. && bazel-bin/external/org_skia_go_infra/bazel/gazelle/gazelle_cpp_/gazelle_cpp update \
 		--third_party_file_map="third_party/file_map_for_bazel.json" \
-		include src tools \
+		include src tools gm tests \
 		modules/skshaper modules/svg modules/skresources modules/skparagraph modules/skunicode \
-		experimental/bazel_test experimental/graphite example
+		modules/skottie modules/skresources modules/sksg experimental/ffmpeg \
+		modules/particles \
+		experimental/bazel_test experimental/graphite example \
+		modules/canvaskit/go \
+		infra/bots/task_drivers
 
 # This target should be run after the go.mod file is updated (e.g. version rolls or new updates)
 gazelle_update_repo:
@@ -18,4 +22,4 @@ known_good_builds:
 	bazelisk build //:skia_core --config=clang --sandbox_base=/dev/shm
 	bazelisk build //src/sksl/lex:sksllex --config=clang --sandbox_base=/dev/shm
 	bazelisk build //tools/skdiff --config=clang --sandbox_base=/dev/shm
-	bazelisk build //example:hello_world --config=clang --sandbox_base=/dev/shm
+	bazelisk build //example:hello_world_gl --config=clang --sandbox_base=/dev/shm

@@ -20,17 +20,19 @@ namespace skgpu {
 // instance are emitted as degenerate triangles.
 class StrokeFixedCountTessellator final : public StrokeTessellator {
 public:
-    constexpr static float kMaxParametricSegments_pow4 = 32*32*32*32;  // 32^4
+    constexpr static int kMaxParametricSegments = 32;
     constexpr static int8_t kMaxParametricSegments_log2 = 5;  // log2(32)
 
     StrokeFixedCountTessellator(PatchAttribs attribs) : StrokeTessellator(attribs) {}
 
-    int patchPreallocCount(int totalCombinedStrokeVerbCnt) const final;
-
-    int writePatches(PatchWriter&,
-                     const SkMatrix& shaderMatrix,
-                     std::array<float,2> matrixMinMaxScales,
-                     PathStrokeList*) final;
+    static int PatchPreallocCount(int totalCombinedStrokeVerbCnt) {
+        // Over-allocate enough patches for each stroke to chop once, and for 8 extra caps. Since we
+        // have to chop at inflections, points of 180 degree rotation, and anywhere a stroke
+        // requires too many parametric segments, many strokes will end up getting choppped.
+        int strokePreallocCount = totalCombinedStrokeVerbCnt * 2;
+        int capPreallocCount = 8;
+        return strokePreallocCount + capPreallocCount;
+    }
 
 #if SK_GPU_V1
     int prepare(GrMeshDrawTarget*,

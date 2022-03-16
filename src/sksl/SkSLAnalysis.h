@@ -11,6 +11,7 @@
 #include "include/core/SkSpan.h"
 #include "include/private/SkSLDefines.h"
 #include "include/private/SkSLSampleUsage.h"
+#include "include/sksl/SkSLErrorReporter.h"
 
 #include <memory>
 #include <set>
@@ -57,6 +58,12 @@ bool ReferencesFragCoords(const Program& program);
 bool CallsSampleOutsideMain(const Program& program);
 
 bool CallsColorTransformIntrinsics(const Program& program);
+
+/**
+ * Determines if `function` always returns an opaque color (a vec4 where the last component is known
+ * to be 1). This is conservative, and based on constant expression analysis.
+ */
+bool ReturnsOpaqueColor(const FunctionDefinition& function);
 
 /**
  * Computes the size of the program in a completely flattened state--loops fully unrolled,
@@ -159,7 +166,7 @@ bool IsConstantIndexExpression(const Expression& expr,
  * If the requirements are not met, the problem is reported via `errors` (if not nullptr), and
  * null is returned.
  */
-std::unique_ptr<LoopUnrollInfo> GetLoopUnrollInfo(int line,
+std::unique_ptr<LoopUnrollInfo> GetLoopUnrollInfo(Position pos,
                                                   const Statement* loopInitializer,
                                                   const Expression* loopTest,
                                                   const Expression* loopNext,

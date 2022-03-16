@@ -72,6 +72,10 @@ var CanvasKit = {
   // Defined by emscripten.
   createContext: function() {},
 
+  // Added by debugger when it extends canvaskit
+  MinVersion: function() {},
+  SkpFilePlayer: function() {},
+
   // private API (i.e. things declared in the bindings that we use
   // in the pre-js file)
   _MakeGrContext: function() {},
@@ -633,6 +637,10 @@ var CanvasKit = {
 
   Picture: {
     serialize: function() {},
+    prototype: {
+      makeShader: function() {},
+    },
+    _makeShader: function() {},
   },
 
   PictureRecorder: {

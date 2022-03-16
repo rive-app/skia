@@ -223,7 +223,7 @@ std::shared_ptr<SymbolTable> Compiler::makePrivateSymbolTable(std::shared_ptr<Sy
 
     // sk_Caps is "builtin", but all references to it are resolved to Settings, so we don't need to
     // treat it as builtin (ie, no need to clone it into the Program).
-    privateSymbolTable->add(std::make_unique<Variable>(/*line=*/-1,
+    privateSymbolTable->add(std::make_unique<Variable>(Position(),
                                                        fCoreModifiers.add(Modifiers{}),
                                                        "sk_Caps",
                                                        fContext->fTypes.fSkCaps.get(),
@@ -272,6 +272,16 @@ static void add_glsl_type_aliases(SkSL::SymbolTable* symbols, const SkSL::Builti
     symbols->addWithoutOwnership(types.fMat2.get());
     symbols->addWithoutOwnership(types.fMat3.get());
     symbols->addWithoutOwnership(types.fMat4.get());
+
+    symbols->addWithoutOwnership(types.fMat2x2.get());
+    symbols->addWithoutOwnership(types.fMat2x3.get());
+    symbols->addWithoutOwnership(types.fMat2x4.get());
+    symbols->addWithoutOwnership(types.fMat3x2.get());
+    symbols->addWithoutOwnership(types.fMat3x3.get());
+    symbols->addWithoutOwnership(types.fMat3x4.get());
+    symbols->addWithoutOwnership(types.fMat4x2.get());
+    symbols->addWithoutOwnership(types.fMat4x3.get());
+    symbols->addWithoutOwnership(types.fMat4x4.get());
 
     // Alias every private type to "invalid". This will prevent code from using built-in names like
     // `sampler2D` as variable names.
@@ -351,7 +361,7 @@ LoadedModule Compiler::loadModule(ProgramKind kind,
     SkASSERT(this->errorCount() == 0);
     SkASSERT(data.fPath);
     std::ifstream in(data.fPath);
-    String text{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
+    std::string text{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
     if (in.rdstate()) {
         printf("error reading %s\n", data.fPath);
         abort();
@@ -398,13 +408,13 @@ ParsedModule Compiler::parseModule(ProgramKind kind, ModuleData data, const Pars
                 const GlobalVarDeclaration& global = element->as<GlobalVarDeclaration>();
                 const Variable& var = global.declaration()->as<VarDeclaration>().var();
                 SkASSERT(var.isBuiltin());
-                elements->insertOrDie(String(var.name()), std::move(element));
+                elements->insertOrDie(std::string(var.name()), std::move(element));
                 break;
             }
             case ProgramElement::Kind::kInterfaceBlock: {
                 const Variable& var = element->as<InterfaceBlock>().variable();
                 SkASSERT(var.isBuiltin());
-                elements->insertOrDie(String(var.name()), std::move(element));
+                elements->insertOrDie(std::string(var.name()), std::move(element));
                 break;
             }
             default:
@@ -418,7 +428,7 @@ ParsedModule Compiler::parseModule(ProgramKind kind, ModuleData data, const Pars
 }
 
 std::unique_ptr<Program> Compiler::convertProgram(ProgramKind kind,
-                                                  String text,
+                                                  std::string text,
                                                   Program::Settings settings) {
     TRACE_EVENT0("skia.shaders", "SkSL::Compiler::convertProgram");
 
@@ -466,10 +476,10 @@ std::unique_ptr<Program> Compiler::convertProgram(ProgramKind kind,
     return DSLParser(this, settings, kind, std::move(text)).program();
 }
 
-std::unique_ptr<Expression> Compiler::convertIdentifier(int line, std::string_view name) {
+std::unique_ptr<Expression> Compiler::convertIdentifier(Position pos, std::string_view name) {
     const Symbol* result = (*fSymbolTable)[name];
     if (!result) {
-        this->errorReporter().error(line, "unknown identifier '" + SkSL::String(name) + "'");
+        this->errorReporter().error(pos, "unknown identifier '" + std::string(name) + "'");
         return nullptr;
     }
     switch (result->kind()) {
@@ -477,11 +487,11 @@ std::unique_ptr<Expression> Compiler::convertIdentifier(int line, std::string_vi
             std::vector<const FunctionDeclaration*> f = {
                 &result->as<FunctionDeclaration>()
             };
-            return std::make_unique<FunctionReference>(*fContext, line, f);
+            return std::make_unique<FunctionReference>(*fContext, pos, f);
         }
         case Symbol::Kind::kUnresolvedFunction: {
             const UnresolvedFunction* f = &result->as<UnresolvedFunction>();
-            return std::make_unique<FunctionReference>(*fContext, line, f->functions());
+            return std::make_unique<FunctionReference>(*fContext, pos, f->functions());
         }
         case Symbol::Kind::kVariable: {
             const Variable* var = &result->as<Variable>();
@@ -497,11 +507,11 @@ std::unique_ptr<Expression> Compiler::convertIdentifier(int line, std::string_vi
                     break;
             }
             // default to kRead_RefKind; this will be corrected later if the variable is written to
-            return VariableReference::Make(line, var, VariableReference::RefKind::kRead);
+            return VariableReference::Make(pos, var, VariableReference::RefKind::kRead);
         }
         case Symbol::Kind::kField: {
             const Field* field = &result->as<Field>();
-            auto base = VariableReference::Make(line, &field->owner(),
+            auto base = VariableReference::Make(pos, &field->owner(),
                                                 VariableReference::RefKind::kRead);
             return FieldAccess::Make(*fContext, std::move(base), field->fieldIndex(),
                                      FieldAccess::OwnerKind::kAnonymousInterfaceBlock);
@@ -509,12 +519,12 @@ std::unique_ptr<Expression> Compiler::convertIdentifier(int line, std::string_vi
         case Symbol::Kind::kType: {
             // go through DSLType so we report errors on private types
             dsl::DSLModifiers modifiers;
-            dsl::DSLType dslType(result->name(), &modifiers, PositionInfo(/*file=*/nullptr, line));
-            return TypeReference::Convert(*fContext, line, &dslType.skslType());
+            dsl::DSLType dslType(result->name(), &modifiers, pos);
+            return TypeReference::Convert(*fContext, pos, &dslType.skslType());
         }
         case Symbol::Kind::kExternal: {
             const ExternalFunction* r = &result->as<ExternalFunction>();
-            return std::make_unique<ExternalFunctionReference>(line, r);
+            return std::make_unique<ExternalFunctionReference>(pos, r);
         }
         default:
             SK_ABORT("unsupported symbol type %d\n", (int) result->kind());
@@ -632,9 +642,9 @@ bool Compiler::toSPIRV(Program& program, OutputStream& out) {
     bool result = cg.generateCode();
     if (result && program.fConfig->fSettings.fValidateSPIRV) {
         spvtools::SpirvTools tools(SPV_ENV_VULKAN_1_0);
-        const String& data = buffer.str();
+        const std::string& data = buffer.str();
         SkASSERT(0 == data.size() % 4);
-        String errors;
+        std::string errors;
         auto dumpmsg = [&errors](spv_message_level_t, const char*, const spv_position_t&,
                                  const char* m) {
             String::appendf(&errors, "SPIR-V validation error: %s\n", m);
@@ -653,8 +663,8 @@ bool Compiler::toSPIRV(Program& program, OutputStream& out) {
             if (tools.Disassemble((const uint32_t*)data.data(), data.size() / 4, &disassembly)) {
                 errors.append(disassembly);
             }
-            this->errorReporter().error(-1, errors);
-            this->errorReporter().reportPendingErrors(PositionInfo());
+            this->errorReporter().error(Position(), errors);
+            this->errorReporter().reportPendingErrors(Position());
 #else
             SkDEBUGFAILF("%s", errors.c_str());
 #endif
@@ -669,7 +679,7 @@ bool Compiler::toSPIRV(Program& program, OutputStream& out) {
     return result;
 }
 
-bool Compiler::toSPIRV(Program& program, String* out) {
+bool Compiler::toSPIRV(Program& program, std::string* out) {
     StringStream buffer;
     bool result = this->toSPIRV(program, buffer);
     if (result) {
@@ -686,7 +696,7 @@ bool Compiler::toGLSL(Program& program, OutputStream& out) {
     return result;
 }
 
-bool Compiler::toGLSL(Program& program, String* out) {
+bool Compiler::toGLSL(Program& program, std::string* out) {
     StringStream buffer;
     bool result = this->toGLSL(program, buffer);
     if (result) {
@@ -697,7 +707,7 @@ bool Compiler::toGLSL(Program& program, String* out) {
 
 bool Compiler::toHLSL(Program& program, OutputStream& out) {
     TRACE_EVENT0("skia.shaders", "SkSL::Compiler::toHLSL");
-    String hlsl;
+    std::string hlsl;
     if (!this->toHLSL(program, &hlsl)) {
         return false;
     }
@@ -705,8 +715,8 @@ bool Compiler::toHLSL(Program& program, OutputStream& out) {
     return true;
 }
 
-bool Compiler::toHLSL(Program& program, String* out) {
-    String spirv;
+bool Compiler::toHLSL(Program& program, std::string* out) {
+    std::string spirv;
     if (!this->toSPIRV(program, &spirv)) {
         return false;
     }
@@ -727,7 +737,7 @@ bool Compiler::toMetal(Program& program, OutputStream& out) {
     return result;
 }
 
-bool Compiler::toMetal(Program& program, String* out) {
+bool Compiler::toMetal(Program& program, std::string* out) {
     StringStream buffer;
     bool result = this->toMetal(program, buffer);
     if (result) {
@@ -738,19 +748,19 @@ bool Compiler::toMetal(Program& program, String* out) {
 
 #endif // defined(SKSL_STANDALONE) || SK_SUPPORT_GPU
 
-void Compiler::handleError(std::string_view msg, PositionInfo pos) {
+void Compiler::handleError(std::string_view msg, Position pos) {
     fErrorText += "error: ";
-    if (pos.line() >= 1) {
-        fErrorText += skstd::to_string(pos.line()) + ": ";
+    if (pos.valid()) {
+        fErrorText += std::to_string(pos.line(this->errorReporter().source())) + ": ";
     }
-    fErrorText += SkSL::String(msg) + "\n";
+    fErrorText += std::string(msg) + "\n";
 }
 
-String Compiler::errorText(bool showCount) {
+std::string Compiler::errorText(bool showCount) {
     if (showCount) {
         this->writeErrorCount();
     }
-    String result = fErrorText;
+    std::string result = fErrorText;
     this->resetErrors();
     return result;
 }
@@ -758,7 +768,7 @@ String Compiler::errorText(bool showCount) {
 void Compiler::writeErrorCount() {
     int count = this->errorCount();
     if (count) {
-        fErrorText += skstd::to_string(count) + " error";
+        fErrorText += std::to_string(count) + " error";
         if (count > 1) {
             fErrorText += "s";
         }

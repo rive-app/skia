@@ -30,7 +30,7 @@ release_viewer:
 
 debug:
 	# Does an incremental build where possible.
-	./compile.sh debug
+	./compile.sh debug_build
 	- rm -rf build/
 	mkdir build
 	cp ../../out/canvaskit_wasm_debug/canvaskit.js   ./build/
@@ -38,7 +38,7 @@ debug:
 
 debug_cpu:
 	# Does an incremental build where possible.
-	./compile.sh debug cpu_only
+	./compile.sh debug_build cpu_only
 	- rm -rf build/
 	mkdir build
 	cp ../../out/canvaskit_wasm_debug/canvaskit.js   ./build/
@@ -46,7 +46,7 @@ debug_cpu:
 
 debug_viewer:
 	# Does an incremental build where possible.
-	./compile.sh debug viewer
+	./compile.sh debug_build viewer
 	- rm -rf build/
 	mkdir build
 	cp ../../out/canvaskit_wasm_debug/canvaskit.js   ./build/
@@ -72,7 +72,7 @@ npm:
 	# These features are turned off to keep code size smaller for the
 	# general use case.
 	./compile.sh release no_skottie no_particles no_rt_shader no_sksl_trace no_alias_font \
-		no_effects_deserialization no_encode_jpeg no_encode_webp
+		no_effects_deserialization no_encode_jpeg no_encode_webp legacy_draw_vertices
 	cp ../../out/canvaskit_wasm/canvaskit.js       ./npm_build/bin
 	cp ../../out/canvaskit_wasm/canvaskit.wasm     ./npm_build/bin
 
@@ -127,19 +127,19 @@ bazel_gms_release:
 	# unit, by letting the cache be used (and not dropped from the sandbox), which gets expensive.
 	# Local testing showed using the local strategy sped up a clean build from 9.5 minutes
 	# to 1 minute. https://docs.bazel.build/versions/main/user-manual.html#strategy-options
-	bazelisk build :gm_bindings_wasm --compilation_mode opt --spawn_strategy=local
+	bazelisk build :wasm_gm_tests --compilation_mode opt --spawn_strategy=local
 	- rm -rf build/
 	mkdir build
-	cp ../../bazel-bin/modules/canvaskit/gm_bindings_wasm/gm_bindings.js build/gm_bindings.js
-	cp ../../bazel-bin/modules/canvaskit/gm_bindings_wasm/gm_bindings.wasm build/gm_bindings.wasm
+	cp ../../bazel-bin/modules/canvaskit/wasm_gm_tests/wasm_gm_tests.js build/wasm_gm_tests.js
+	cp ../../bazel-bin/modules/canvaskit/wasm_gm_tests/wasm_gm_tests.wasm build/wasm_gm_tests.wasm
 
 bazel_gms_debug:
 	# See above note about spawn_strategy
-	bazelisk build :gm_bindings_wasm --compilation_mode dbg --spawn_strategy=local
+	bazelisk build :wasm_gm_tests --compilation_mode dbg --spawn_strategy=local
 	- rm -rf build/
 	mkdir build
-	cp ../../bazel-bin/modules/canvaskit/gm_bindings_wasm/gm_bindings.js build/gm_bindings.js
-	cp ../../bazel-bin/modules/canvaskit/gm_bindings_wasm/gm_bindings.wasm build/gm_bindings.wasm
+	cp ../../bazel-bin/modules/canvaskit/wasm_gm_tests/wasm_gm_tests.js build/wasm_gm_tests.js
+	cp ../../bazel-bin/modules/canvaskit/wasm_gm_tests/wasm_gm_tests.wasm build/wasm_gm_tests.wasm
 
 bazel_canvaskit_debug:
 	# See above note about spawn_strategy
@@ -157,3 +157,19 @@ bazel_canvaskit_release:
 	cp ../../bazel-bin/modules/canvaskit/canvaskit_wasm/canvaskit.js build/canvaskit.js
 	cp ../../bazel-bin/modules/canvaskit/canvaskit_wasm/canvaskit.wasm build/canvaskit.wasm
 	ls -l build
+
+bazel_test_canvaskit:
+	bazelisk test :canvaskit_js_wasms --compilation_mode opt --spawn_strategy=local \
+ 		--test_output=streamed
+	echo "test output in //bazel-testlogs/modules/canvaskit/canvaskit_js_wasms/test.outputs/"
+	ls ../../bazel-testlogs/modules/canvaskit/canvaskit_js_wasms/test.outputs/
+
+with_debugger:
+	# Does an incremental build where possible.
+	./compile.sh debug_build enable_debugger
+	- rm -rf build/
+	mkdir build
+	cp ../../out/canvaskit_wasm_debug/canvaskit.js   ./build/
+	cp ../../out/canvaskit_wasm_debug/canvaskit.wasm ./build/
+	cp ./build/canvaskit.js   ${SKIA_INFRA_ROOT}/debugger-app/wasm_libs/local_build/
+	cp ./build/canvaskit.wasm ${SKIA_INFRA_ROOT}/debugger-app/wasm_libs/local_build/

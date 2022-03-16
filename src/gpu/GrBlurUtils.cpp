@@ -9,8 +9,14 @@
 
 #if SK_GPU_V1
 
+#include "include/core/SkBitmap.h"
+#include "include/core/SkPaint.h"
 #include "include/gpu/GrDirectContext.h"
 #include "include/gpu/GrRecordingContext.h"
+#include "src/core/SkDraw.h"
+#include "src/core/SkMaskFilterBase.h"
+#include "src/core/SkMatrixProvider.h"
+#include "src/core/SkTLazy.h"
 #include "src/gpu/GrCaps.h"
 #include "src/gpu/GrDirectContextPriv.h"
 #include "src/gpu/GrFixedClip.h"
@@ -25,13 +31,6 @@
 #include "src/gpu/effects/GrTextureEffect.h"
 #include "src/gpu/geometry/GrStyledShape.h"
 #include "src/gpu/v1/SurfaceDrawContext_v1.h"
-
-#include "include/core/SkPaint.h"
-#include "src/core/SkDraw.h"
-#include "src/core/SkMaskFilterBase.h"
-#include "src/core/SkMatrixProvider.h"
-#include "src/core/SkTLazy.h"
-#include "src/gpu/SkGr.h"
 
 static bool clip_bounds_quick_reject(const SkIRect& clipBounds, const SkIRect& rect) {
     return clipBounds.isEmpty() || rect.isEmpty() || !SkIRect::Intersects(clipBounds, rect);
@@ -53,7 +52,7 @@ static bool draw_mask(skgpu::v1::SurfaceDrawContext* sdc,
         return false;
     }
 
-    mask.concatSwizzle(GrSwizzle("aaaa"));
+    mask.concatSwizzle(skgpu::Swizzle("aaaa"));
 
     SkMatrix matrix = SkMatrix::Translate(-SkIntToScalar(maskBounds.fLeft),
                                           -SkIntToScalar(maskBounds.fTop));
@@ -133,7 +132,7 @@ static GrSurfaceProxyView sw_create_filtered_mask(GrRecordingContext* rContext,
         devPath.transform(viewMatrix);
 
         SkMask srcM, dstM;
-        if (!SkDraw::DrawToMask(devPath, &clipBounds, filter, &viewMatrix, &srcM,
+        if (!SkDraw::DrawToMask(devPath, clipBounds, filter, &viewMatrix, &srcM,
                                 SkMask::kComputeBoundsAndRenderImage_CreateMode, fillOrHairline)) {
             return {};
         }
@@ -237,12 +236,17 @@ static std::unique_ptr<skgpu::v1::SurfaceDrawContext> create_mask_GPU(
 
 static bool get_unclipped_shape_dev_bounds(const GrStyledShape& shape, const SkMatrix& matrix,
                                            SkIRect* devBounds) {
-    SkRect shapeBounds = shape.styledBounds();
-    if (shapeBounds.isEmpty()) {
-        return false;
-    }
     SkRect shapeDevBounds;
-    matrix.mapRect(&shapeDevBounds, shapeBounds);
+    if (shape.inverseFilled()) {
+        shapeDevBounds = {SK_ScalarNegativeInfinity, SK_ScalarNegativeInfinity,
+                          SK_ScalarInfinity, SK_ScalarInfinity};
+    } else {
+        SkRect shapeBounds = shape.styledBounds();
+        if (shapeBounds.isEmpty()) {
+            return false;
+        }
+        matrix.mapRect(&shapeDevBounds, shapeBounds);
+    }
     // Even though these are "unclipped" bounds we still clip to the int32_t range.
     // This is the largest int32_t that is representable exactly as a float. The next 63 larger ints
     // would round down to this value when cast to a float, but who really cares.

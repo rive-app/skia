@@ -414,20 +414,20 @@ void GrGLCaps::init(const GrContextOptions& contextOptions,
         shaderCaps->fIntegerSupport =
                 // We use this value for GLSL ES 3.0.
                 version >= GR_GL_VER(3, 0) &&
-                ctxInfo.glslGeneration() >= SkSL::GLSLGeneration::k330;
+                ctxInfo.glslGeneration() >= SkSL::GLSLGeneration::k300es;
         shaderCaps->fNonsquareMatrixSupport =
-                ctxInfo.glslGeneration() >= SkSL::GLSLGeneration::k330;
+                ctxInfo.glslGeneration() >= SkSL::GLSLGeneration::k300es;
         shaderCaps->fInverseHyperbolicSupport =
-                ctxInfo.glslGeneration() >= SkSL::GLSLGeneration::k330;
+                ctxInfo.glslGeneration() >= SkSL::GLSLGeneration::k300es;
     } else if (GR_IS_GR_WEBGL(standard)) {
         shaderCaps->fShaderDerivativeSupport = version >= GR_GL_VER(2, 0) ||
                                                ctxInfo.hasExtension("GL_OES_standard_derivatives") ||
                                                ctxInfo.hasExtension("OES_standard_derivatives");
         shaderCaps->fIntegerSupport = (version >= GR_GL_VER(2, 0));
         shaderCaps->fNonsquareMatrixSupport =
-                ctxInfo.glslGeneration() >= SkSL::GLSLGeneration::k330;
+                ctxInfo.glslGeneration() >= SkSL::GLSLGeneration::k300es;
         shaderCaps->fInverseHyperbolicSupport =
-                ctxInfo.glslGeneration() >= SkSL::GLSLGeneration::k330;
+                ctxInfo.glslGeneration() >= SkSL::GLSLGeneration::k300es;
     }
 
     if (ctxInfo.hasExtension("GL_NV_conservative_raster")) {
@@ -443,7 +443,7 @@ void GrGLCaps::init(const GrContextOptions& contextOptions,
                 ctxInfo.glslGeneration() < SkSL::GLSLGeneration::k130;  // introduced in GLSL 1.3
     } else if (GR_IS_GR_GL_ES(standard)) {
         shaderCaps->fRewriteSwitchStatements =
-                ctxInfo.glslGeneration() < SkSL::GLSLGeneration::k330;  // introduced in GLSL ES3
+                ctxInfo.glslGeneration() < SkSL::GLSLGeneration::k300es;  // introduced in GLSL ES3
     } else if (GR_IS_GR_WEBGL(standard)) {
         shaderCaps->fRewriteSwitchStatements = version < GR_GL_VER(2, 0);  // introduced in WebGL 2
     }
@@ -850,11 +850,9 @@ const char* get_glsl_version_decl_string(GrGLStandard standard, SkSL::GLSLGenera
         }
     } else if (GR_IS_GR_GL_ES(standard) || GR_IS_GR_WEBGL(standard)) {
         switch (generation) {
-            case SkSL::GLSLGeneration::k110:
-                // ES2s shader language is based on version 1.20 but is version
-                // 1.00 of the ES language.
+            case SkSL::GLSLGeneration::k100es:
                 return "#version 100\n";
-            case SkSL::GLSLGeneration::k330:
+            case SkSL::GLSLGeneration::k300es:
                 return "#version 300 es\n";
             case SkSL::GLSLGeneration::k310es:
                 return "#version 310 es\n";
@@ -938,9 +936,8 @@ void GrGLCaps::initGLSL(const GrGLContextInfo& ctxInfo, const GrGLInterface* gli
         shaderCaps->fFlatInterpolationSupport =
                 ctxInfo.glslGeneration() >= SkSL::GLSLGeneration::k130;
     } else if (GR_IS_GR_GL_ES(standard) || GR_IS_GR_WEBGL(standard)) {
-        // This is the value for GLSL ES 3.0.
         shaderCaps->fFlatInterpolationSupport =
-                ctxInfo.glslGeneration() >= SkSL::GLSLGeneration::k330;
+                ctxInfo.glslGeneration() >= SkSL::GLSLGeneration::k300es;
     } // not sure for WebGL
 
     // Flat interpolation appears to be slow on Qualcomm GPUs (tested Adreno 405 and 530).
@@ -954,7 +951,7 @@ void GrGLCaps::initGLSL(const GrGLContextInfo& ctxInfo, const GrGLInterface* gli
             ctxInfo.glslGeneration() >= SkSL::GLSLGeneration::k130;
     } else if (GR_IS_GR_GL_ES(standard)) {
         if (ctxInfo.hasExtension("GL_NV_shader_noperspective_interpolation") &&
-            ctxInfo.glslGeneration() >= SkSL::GLSLGeneration::k330 /* GLSL ES 3.0 */) {
+            ctxInfo.glslGeneration() >= SkSL::GLSLGeneration::k300es) {
             shaderCaps->fNoPerspectiveInterpolationSupport = true;
             shaderCaps->fNoPerspectiveInterpolationExtensionString =
                 "GL_NV_shader_noperspective_interpolation";
@@ -994,7 +991,7 @@ void GrGLCaps::initGLSL(const GrGLContextInfo& ctxInfo, const GrGLInterface* gli
                                                                   fIsCoreProfile);
 
     if (GR_IS_GR_GL_ES(standard) || GR_IS_GR_WEBGL(standard)) {
-        if (SkSL::GLSLGeneration::k110 == shaderCaps->fGLSLGeneration) {
+        if (SkSL::GLSLGeneration::k100es == shaderCaps->fGLSLGeneration) {
             shaderCaps->fShaderDerivativeExtensionString = "GL_OES_standard_derivatives";
         }
     } // WebGL might have to check for OES_standard_derivatives
@@ -1004,7 +1001,7 @@ void GrGLCaps::initGLSL(const GrGLContextInfo& ctxInfo, const GrGLInterface* gli
     }
 
     if (ctxInfo.hasExtension("GL_OES_EGL_image_external")) {
-        if (ctxInfo.glslGeneration() == SkSL::GLSLGeneration::k110) {
+        if (ctxInfo.glslGeneration() == SkSL::GLSLGeneration::k100es) {
             shaderCaps->fExternalTextureSupport = true;
             shaderCaps->fExternalTextureExtensionString = "GL_OES_EGL_image_external";
         } else if (ctxInfo.hasExtension("GL_OES_EGL_image_external_essl3") ||
@@ -1018,16 +1015,20 @@ void GrGLCaps::initGLSL(const GrGLContextInfo& ctxInfo, const GrGLInterface* gli
     if (GR_IS_GR_GL(standard)) {
         shaderCaps->fVertexIDSupport = true;
     } else if (GR_IS_GR_GL_ES(standard) || GR_IS_GR_WEBGL(standard)) {
-        // Desktop GLSL 3.30 == ES GLSL 3.00.
-        shaderCaps->fVertexIDSupport = ctxInfo.glslGeneration() >= SkSL::GLSLGeneration::k330;
+        shaderCaps->fVertexIDSupport = ctxInfo.glslGeneration() >= SkSL::GLSLGeneration::k300es;
     }
 
+    // isinf() exists in GLSL 1.3 and above, but hardware without proper IEEE support is allowed to
+    // always return false, so it's potentially meaningless. In GLSL 3.3 and GLSL ES3+, isinf() is
+    // required to actually identify infinite values. (GPUs are not required to _produce_ infinite
+    // values via operations like `num / 0.0` until GLSL 4.1.)
+    shaderCaps->fInfinitySupport = (ctxInfo.glslGeneration() >= SkSL::GLSLGeneration::k330);
+
     if (GR_IS_GR_GL(standard)) {
-        shaderCaps->fInfinitySupport = shaderCaps->fNonconstantArrayIndexSupport = true;
+        shaderCaps->fNonconstantArrayIndexSupport = true;
     } else if (GR_IS_GR_GL_ES(standard) || GR_IS_GR_WEBGL(standard)) {
-        // Desktop GLSL 3.30 == ES GLSL 3.00.
-        shaderCaps->fInfinitySupport = shaderCaps->fNonconstantArrayIndexSupport =
-                (ctxInfo.glslGeneration() >= SkSL::GLSLGeneration::k330);
+        shaderCaps->fNonconstantArrayIndexSupport =
+                (ctxInfo.glslGeneration() >= SkSL::GLSLGeneration::k300es);
     }
 
     if (GR_IS_GR_GL(standard)) {
@@ -1051,11 +1052,6 @@ void GrGLCaps::initGLSL(const GrGLContextInfo& ctxInfo, const GrGLInterface* gli
     }
 
     shaderCaps->fBuiltinDeterminantSupport = ctxInfo.glslGeneration() >= SkSL::GLSLGeneration::k150;
-
-    if (GR_IS_GR_WEBGL(standard)) {
-      // WebGL 1.0 doesn't support do-while loops.
-      shaderCaps->fCanUseDoLoops = version >= GR_GL_VER(2, 0);
-    }
 }
 
 void GrGLCaps::initFSAASupport(const GrContextOptions& contextOptions,
@@ -1101,7 +1097,7 @@ void GrGLCaps::initBlendEqationSupport(const GrGLContextInfo& ctxInfo) {
 
     bool layoutQualifierSupport = false;
     if ((GR_IS_GR_GL(fStandard) && shaderCaps->generation() >= SkSL::GLSLGeneration::k140)  ||
-        (GR_IS_GR_GL_ES(fStandard) && shaderCaps->generation() >= SkSL::GLSLGeneration::k330)) {
+        (GR_IS_GR_GL_ES(fStandard) && shaderCaps->generation() >= SkSL::GLSLGeneration::k300es)) {
         layoutQualifierSupport = true;
     } else if (GR_IS_GR_WEBGL(fStandard)) {
         return;
@@ -1525,7 +1521,7 @@ void GrGLCaps::initFormatTable(const GrGLContextInfo& ctxInfo, const GrGLInterfa
             auto& ctInfo = info.fColorTypeInfos[ctIdx++];
             ctInfo.fColorType = GrColorType::kRGB_888x;
             ctInfo.fFlags = ColorTypeInfo::kUploadData_Flag;
-            ctInfo.fReadSwizzle = GrSwizzle::RGB1();
+            ctInfo.fReadSwizzle = skgpu::Swizzle::RGB1();
 
             // External IO ColorTypes:
             ctInfo.fExternalIOFormatCount = 1;
@@ -1578,16 +1574,49 @@ void GrGLCaps::initFormatTable(const GrGLContextInfo& ctxInfo, const GrGLInterfa
         }
 
         if (r8Support) {
-            info.fColorTypeInfoCount = 2;
+            info.fColorTypeInfoCount = 3;
             info.fColorTypeInfos = std::make_unique<ColorTypeInfo[]>(info.fColorTypeInfoCount);
             int ctIdx = 0;
+            // Format: R8, Surface: kR_8
+            {
+                auto& ctInfo = info.fColorTypeInfos[ctIdx++];
+                ctInfo.fColorType = GrColorType::kR_8;
+                ctInfo.fFlags = ColorTypeInfo::kUploadData_Flag | ColorTypeInfo::kRenderable_Flag;
+                this->setColorTypeFormat(GrColorType::kR_8, GrGLFormat::kR8);
+
+                // External IO ColorTypes:
+                ctInfo.fExternalIOFormatCount = 2;
+                ctInfo.fExternalIOFormats = std::make_unique<ColorTypeInfo::ExternalIOFormats[]>(
+                        ctInfo.fExternalIOFormatCount);
+                int ioIdx = 0;
+                // Format: R8, Surface: kR_8, Data: kR_8
+                {
+                    auto& ioFormat = ctInfo.fExternalIOFormats[ioIdx++];
+                    ioFormat.fColorType = GrColorType::kR_8;
+                    ioFormat.fExternalType = GR_GL_UNSIGNED_BYTE;
+                    ioFormat.fExternalTexImageFormat = GR_GL_RED;
+                    ioFormat.fExternalReadFormat = GR_GL_RED;
+                    // Not guaranteed by ES/WebGL.
+                    ioFormat.fRequiresImplementationReadQuery = !GR_IS_GR_GL(standard);
+                }
+
+                // Format: R8, Surface: kR_8, Data: kR_8xxx
+                {
+                    auto& ioFormat = ctInfo.fExternalIOFormats[ioIdx++];
+                    ioFormat.fColorType = GrColorType::kR_8xxx;
+                    ioFormat.fExternalType = GR_GL_UNSIGNED_BYTE;
+                    ioFormat.fExternalTexImageFormat = 0;
+                    ioFormat.fExternalReadFormat = GR_GL_RGBA;
+                }
+            }
+
             // Format: R8, Surface: kAlpha_8
             {
                 auto& ctInfo = info.fColorTypeInfos[ctIdx++];
                 ctInfo.fColorType = GrColorType::kAlpha_8;
                 ctInfo.fFlags = ColorTypeInfo::kUploadData_Flag | ColorTypeInfo::kRenderable_Flag;
-                ctInfo.fReadSwizzle = GrSwizzle("000r");
-                ctInfo.fWriteSwizzle = GrSwizzle("a000");
+                ctInfo.fReadSwizzle = skgpu::Swizzle("000r");
+                ctInfo.fWriteSwizzle = skgpu::Swizzle("a000");
                 this->setColorTypeFormat(GrColorType::kAlpha_8, GrGLFormat::kR8);
 
                 // External IO ColorTypes:
@@ -1621,7 +1650,7 @@ void GrGLCaps::initFormatTable(const GrGLContextInfo& ctxInfo, const GrGLInterfa
                 auto& ctInfo = info.fColorTypeInfos[ctIdx++];
                 ctInfo.fColorType = GrColorType::kGray_8;
                 ctInfo.fFlags = ColorTypeInfo::kUploadData_Flag;
-                ctInfo.fReadSwizzle = GrSwizzle("rrr1");
+                ctInfo.fReadSwizzle = skgpu::Swizzle("rrr1");
                 this->setColorTypeFormat(GrColorType::kGray_8, GrGLFormat::kR8);
 
                 // External IO ColorTypes:
@@ -2303,8 +2332,8 @@ void GrGLCaps::initFormatTable(const GrGLContextInfo& ctxInfo, const GrGLInterfa
                 auto& ctInfo = info.fColorTypeInfos[ctIdx++];
                 ctInfo.fColorType = GrColorType::kAlpha_F16;
                 ctInfo.fFlags = ColorTypeInfo::kUploadData_Flag | ColorTypeInfo::kRenderable_Flag;
-                ctInfo.fReadSwizzle = GrSwizzle("000r");
-                ctInfo.fWriteSwizzle = GrSwizzle("a000");
+                ctInfo.fReadSwizzle = skgpu::Swizzle("000r");
+                ctInfo.fWriteSwizzle = skgpu::Swizzle("a000");
                 this->setColorTypeFormat(GrColorType::kAlpha_F16, GrGLFormat::kR16F);
 
                 // External IO ColorTypes:
@@ -2386,8 +2415,8 @@ void GrGLCaps::initFormatTable(const GrGLContextInfo& ctxInfo, const GrGLInterfa
                 auto& ctInfo = info.fColorTypeInfos[ctIdx++];
                 ctInfo.fColorType = GrColorType::kAlpha_F16;
                 ctInfo.fFlags = ColorTypeInfo::kUploadData_Flag;
-                ctInfo.fReadSwizzle = GrSwizzle("000r");
-                ctInfo.fWriteSwizzle = GrSwizzle("aaa0");
+                ctInfo.fReadSwizzle = skgpu::Swizzle("000r");
+                ctInfo.fWriteSwizzle = skgpu::Swizzle("aaa0");
 
                 int idx = static_cast<int>(GrColorType::kAlpha_F16);
                 if (fColorTypeToFormatTable[idx] == GrGLFormat::kUnknown) {
@@ -2997,8 +3026,8 @@ void GrGLCaps::initFormatTable(const GrGLContextInfo& ctxInfo, const GrGLInterfa
                 auto& ctInfo = info.fColorTypeInfos[ctIdx++];
                 ctInfo.fColorType = GrColorType::kAlpha_16;
                 ctInfo.fFlags = ColorTypeInfo::kUploadData_Flag | ColorTypeInfo::kRenderable_Flag;
-                ctInfo.fReadSwizzle = GrSwizzle("000r");
-                ctInfo.fWriteSwizzle = GrSwizzle("a000");
+                ctInfo.fReadSwizzle = skgpu::Swizzle("000r");
+                ctInfo.fWriteSwizzle = skgpu::Swizzle("a000");
                 this->setColorTypeFormat(GrColorType::kAlpha_16, GrGLFormat::kR16);
 
                 // External IO ColorTypes:
@@ -3927,10 +3956,6 @@ void GrGLCaps::applyDriverCorrectnessWorkarounds(const GrGLContextInfo& ctxInfo,
         // Tegra3 fract() seems to trigger undefined behavior for negative values, so we
         // must avoid this condition.
         shaderCaps->fCanUseFractForNegativeValues = false;
-
-        // Seeing crashes on Tegra3 with inlined functions that have early returns. Looks like the
-        // do { ... break; } while (false); construct is causing a crash in the driver.
-        shaderCaps->fCanUseDoLoops = false;
     }
 
     // On Intel GPU there is an issue where it reads the second argument to atan "- %s.x" as an int
@@ -4091,12 +4116,12 @@ void GrGLCaps::applyDriverCorrectnessWorkarounds(const GrGLContextInfo& ctxInfo,
         if (ctxInfo.driver() == GrGLDriver::kNVIDIA &&
             ctxInfo.driverVersion() < GR_GL_DRIVER_VER(355, 00, 0)) {
             // Disable color-dodge and color-burn on pre-355.00 NVIDIA.
-            fAdvBlendEqDisableFlags |= (1 << kColorDodge_GrBlendEquation) |
-                                    (1 << kColorBurn_GrBlendEquation);
+            fAdvBlendEqDisableFlags |= (1 << static_cast<int>(skgpu::BlendEquation::kColorDodge)) |
+                                    (1 << static_cast<int>(skgpu::BlendEquation::kColorBurn));
         }
         if (ctxInfo.vendor() == GrGLVendor::kARM) {
             // Disable color-burn on ARM until the fix is released.
-            fAdvBlendEqDisableFlags |= (1 << kColorBurn_GrBlendEquation);
+            fAdvBlendEqDisableFlags |= (1 << static_cast<int>(skgpu::BlendEquation::kColorBurn));
         }
     }
 
@@ -4300,11 +4325,6 @@ void GrGLCaps::applyDriverCorrectnessWorkarounds(const GrGLContextInfo& ctxInfo,
          (ctxInfo.renderer() < GrGLRenderer::kIntelIceLake ||
           !contextOptions.fAllowMSAAOnNewIntel)) {
          fMSFBOType = kNone_MSFBOType;
-    }
-
-    // ANGLE doesn't support do-while loops.
-    if (ctxInfo.angleBackend() != GrGLANGLEBackend::kUnknown) {
-        shaderCaps->fCanUseDoLoops = false;
     }
 
     // ANGLE's D3D9 backend + AMD GPUs are flaky with program binary caching (skbug.com/10395)
@@ -4784,7 +4804,8 @@ GrBackendFormat GrGLCaps::getBackendFormatFromCompressionType(
     SkUNREACHABLE;
 }
 
-GrSwizzle GrGLCaps::onGetReadSwizzle(const GrBackendFormat& format, GrColorType colorType) const {
+skgpu::Swizzle GrGLCaps::onGetReadSwizzle(const GrBackendFormat& format,
+                                          GrColorType colorType) const {
     GrGLFormat glFormat = format.asGLFormat();
     const auto& info = this->getFormatInfo(glFormat);
     for (int i = 0; i < info.fColorTypeInfoCount; ++i) {
@@ -4798,7 +4819,8 @@ GrSwizzle GrGLCaps::onGetReadSwizzle(const GrBackendFormat& format, GrColorType 
     return {};
 }
 
-GrSwizzle GrGLCaps::getWriteSwizzle(const GrBackendFormat& format, GrColorType colorType) const {
+skgpu::Swizzle GrGLCaps::getWriteSwizzle(const GrBackendFormat& format,
+                                         GrColorType colorType) const {
     const auto& info = this->getFormatInfo(format.asGLFormat());
     for (int i = 0; i < info.fColorTypeInfoCount; ++i) {
         const auto& ctInfo = info.fColorTypeInfos[i];

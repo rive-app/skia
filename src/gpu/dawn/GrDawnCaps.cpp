@@ -45,30 +45,30 @@ bool GrDawnCaps::isFormatTexturable(const GrBackendFormat& format, GrTextureType
     return format.asDawnFormat(&dawnFormat);
 }
 
-static GrSwizzle get_swizzle(const GrBackendFormat& format, GrColorType colorType,
-                             bool forOutput) {
+static skgpu::Swizzle get_swizzle(const GrBackendFormat& format, GrColorType colorType,
+                                  bool forOutput) {
     switch (colorType) {
         case GrColorType::kAlpha_8: // fall through
         case GrColorType::kAlpha_F16:
             if (forOutput) {
-                return GrSwizzle("a000");
+                return skgpu::Swizzle("a000");
             } else {
-                return GrSwizzle("000r");
+                return skgpu::Swizzle("000r");
             }
         case GrColorType::kGray_8:
             if (!forOutput) {
-                return GrSwizzle::RRRA();
+                return skgpu::Swizzle::RRRA();
             }
             break;
         case GrColorType::kRGB_888x:
             if (!forOutput) {
-                return GrSwizzle::RGB1();
+                return skgpu::Swizzle::RGB1();
             }
             break;
         default:
-            return GrSwizzle::RGBA();
+            return skgpu::Swizzle::RGBA();
     }
-    return GrSwizzle::RGBA();
+    return skgpu::Swizzle::RGBA();
 }
 
 bool GrDawnCaps::isFormatRenderable(const GrBackendFormat& format,
@@ -124,12 +124,13 @@ GrBackendFormat GrDawnCaps::getBackendFormatFromCompressionType(SkImage::Compres
     return GrBackendFormat();
 }
 
-GrSwizzle GrDawnCaps::onGetReadSwizzle(const GrBackendFormat& format, GrColorType colorType) const
-{
+skgpu::Swizzle GrDawnCaps::onGetReadSwizzle(const GrBackendFormat& format,
+                                            GrColorType colorType) const {
     return get_swizzle(format, colorType, false);
 }
 
-GrSwizzle GrDawnCaps::getWriteSwizzle(const GrBackendFormat& format, GrColorType colorType) const {
+skgpu::Swizzle GrDawnCaps::getWriteSwizzle(const GrBackendFormat& format,
+                                           GrColorType colorType) const {
     return get_swizzle(format, colorType, true);
 }
 
@@ -155,13 +156,13 @@ static uint32_t get_blend_info_key(const GrPipeline& pipeline) {
 
     static const uint32_t kBlendWriteShift = 1;
     static const uint32_t kBlendCoeffShift = 5;
-    static_assert(kLast_GrBlendCoeff < (1 << kBlendCoeffShift));
-    static_assert(kFirstAdvancedGrBlendEquation - 1 < 4);
+    static_assert((int)skgpu::BlendCoeff::kLast < (1 << kBlendCoeffShift));
+    static_assert((int)skgpu::BlendEquation::kFirstAdvanced - 1 < 4);
 
     uint32_t key = blendInfo.fWriteColor;
-    key |= (blendInfo.fSrcBlend << kBlendWriteShift);
-    key |= (blendInfo.fDstBlend << (kBlendWriteShift + kBlendCoeffShift));
-    key |= (blendInfo.fEquation << (kBlendWriteShift + 2 * kBlendCoeffShift));
+    key |= ((int)blendInfo.fSrcBlend << kBlendWriteShift);
+    key |= ((int)blendInfo.fDstBlend << (kBlendWriteShift + kBlendCoeffShift));
+    key |= ((int)blendInfo.fEquation << (kBlendWriteShift + 2 * kBlendCoeffShift));
 
     return key;
 }

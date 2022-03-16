@@ -9,6 +9,7 @@
 #define SKSL_MODIFIERS
 
 #include "include/private/SkSLLayout.h"
+#include "include/sksl/SkSLPosition.h"
 
 #include <vector>
 
@@ -58,8 +59,8 @@ struct Modifiers {
     : fLayout(layout)
     , fFlags(flags) {}
 
-    String description() const {
-        String result = fLayout.description();
+    std::string description() const {
+        std::string result = fLayout.description();
 
         // SkSL extensions
         if (fFlags & kES3_Flag) {
@@ -117,7 +118,7 @@ struct Modifiers {
      * Verifies that only permitted modifiers and layout flags are included. Reports errors and
      * returns false in the event of a violation.
      */
-    bool checkPermitted(const Context& context, int line, int permittedModifierFlags,
+    bool checkPermitted(const Context& context, Position pos, int permittedModifierFlags,
             int permittedLayoutFlags) const;
 
     Layout fLayout;

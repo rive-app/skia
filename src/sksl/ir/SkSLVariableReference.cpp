@@ -14,8 +14,8 @@
 
 namespace SkSL {
 
-VariableReference::VariableReference(int line, const Variable* variable, RefKind refKind)
-    : INHERITED(line, kExpressionKind, &variable->type())
+VariableReference::VariableReference(Position pos, const Variable* variable, RefKind refKind)
+    : INHERITED(pos, kExpressionKind, &variable->type())
     , fVariable(variable)
     , fRefKind(refKind) {
     SkASSERT(this->variable());
@@ -35,8 +35,8 @@ bool VariableReference::isConstantOrUniform() const {
     return (this->variable()->modifiers().fFlags & Modifiers::kUniform_Flag) != 0;
 }
 
-String VariableReference::description() const {
-    return String(this->variable()->name());
+std::string VariableReference::description() const {
+    return std::string(this->variable()->name());
 }
 
 void VariableReference::setRefKind(RefKind refKind) {

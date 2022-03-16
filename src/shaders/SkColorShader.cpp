@@ -5,6 +5,8 @@
  * found in the LICENSE file.
  */
 
+#include "src/shaders/SkColorShader.h"
+
 #include "include/core/SkColorSpace.h"
 #include "src/core/SkArenaAlloc.h"
 #include "src/core/SkColorSpacePriv.h"
@@ -13,7 +15,10 @@
 #include "src/core/SkReadBuffer.h"
 #include "src/core/SkUtils.h"
 #include "src/core/SkVM.h"
-#include "src/shaders/SkColorShader.h"
+
+#ifdef SK_ENABLE_SKSL
+#include "src/core/SkKeyHelpers.h"
+#endif
 
 SkColorShader::SkColorShader(SkColor c) : fColor(c) {}
 
@@ -133,4 +138,19 @@ std::unique_ptr<GrFragmentProcessor> SkColor4Shader::asFragmentProcessor(
     return GrFragmentProcessor::MakeColor(color.premul());
 }
 
+#endif
+
+#ifdef SK_ENABLE_SKSL
+void SkColorShader::addToKey(const SkKeyContext& keyContext,
+                             SkPaintParamsKeyBuilder* builder,
+                             SkPipelineData* pipelineData) const {
+    SolidColorShaderBlock::AddToKey(keyContext, builder, pipelineData,
+                                    SkColor4f::FromColor(fColor).premul());
+}
+
+void SkColor4Shader::addToKey(const SkKeyContext& keyContext,
+                              SkPaintParamsKeyBuilder* builder,
+                              SkPipelineData* pipelineData) const {
+    SolidColorShaderBlock::AddToKey(keyContext, builder, pipelineData, fColor.premul());
+}
 #endif

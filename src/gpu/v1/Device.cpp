@@ -33,6 +33,7 @@
 #include "src/core/SkStroke.h"
 #include "src/core/SkTLazy.h"
 #include "src/core/SkVerticesPriv.h"
+#include "src/core/SkWriteBuffer.h"
 #include "src/gpu/GrBlurUtils.h"
 #include "src/gpu/GrDirectContextPriv.h"
 #include "src/gpu/GrGpu.h"
@@ -50,7 +51,6 @@
 #include "src/utils/SkUTF.h"
 
 #define ASSERT_SINGLE_OWNER SKGPU_ASSERT_SINGLE_OWNER(fContext->priv().singleOwner())
-
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -850,7 +850,7 @@ void Device::drawViewLattice(GrSurfaceProxyView view,
     if (info.isAlphaOnly()) {
         // If we were doing this with an FP graph we'd use a kDstIn blend between the texture and
         // the paint color.
-        view.concatSwizzle(GrSwizzle("aaaa"));
+        view.concatSwizzle(skgpu::Swizzle("aaaa"));
     }
     auto csxf = GrColorSpaceXform::Make(info, fSurfaceDrawContext->colorInfo());
 
@@ -997,6 +997,46 @@ void Device::drawAtlas(const SkRSXform xform[],
 
 ///////////////////////////////////////////////////////////////////////////////
 
+#if defined(SK_EXPERIMENTAL_SIMULATE_DRAWGLYPHRUNLIST_WITH_SLUG)
+void Device::testingOnly_drawGlyphRunListWithSlug(SkCanvas* canvas,
+                                                  const SkGlyphRunList& glyphRunList,
+                                                  const SkPaint& paint) {
+    auto slug = this->convertGlyphRunListToSlug(glyphRunList, paint);
+    if (slug != nullptr) {
+        this->drawSlug(canvas, slug.get());
+    }
+}
+#endif
+
+#if defined(SK_EXPERIMENTAL_SIMULATE_DRAWGLYPHRUNLIST_WITH_SLUG_SERIALIZE)
+void Device::testingOnly_drawGlyphRunListWithSerializedSlug(SkCanvas* canvas,
+                                                            const SkGlyphRunList& glyphRunList,
+                                                            const SkPaint& paint) {
+    // This is not a text blob draw. Handle using glyphRunList conversion.
+    if (glyphRunList.blob() == nullptr) {
+        auto slug = this->convertGlyphRunListToSlug(glyphRunList, paint);
+        if (slug != nullptr) {
+            this->drawSlug(canvas, slug.get());
+        }
+        return;
+    }
+    auto srcSlug = GrSlug::ConvertBlob(canvas, *glyphRunList.blob(), glyphRunList.origin(), paint);
+
+    // There is nothing to draw.
+    if (srcSlug == nullptr) {
+        return;
+    }
+
+    auto dstSlugData = srcSlug->serialize();
+
+    auto dstSlug = GrSlug::Deserialize(dstSlugData->data(), dstSlugData->size());
+    SkASSERT(dstSlug != nullptr);
+    if (dstSlug != nullptr) {
+        this->drawSlug(canvas, dstSlug.get());
+    }
+}
+#endif
+
 void Device::onDrawGlyphRunList(SkCanvas* canvas,
                                 const SkGlyphRunList& glyphRunList,
                                 const SkPaint& paint) {
@@ -1005,15 +1045,13 @@ void Device::onDrawGlyphRunList(SkCanvas* canvas,
     SkASSERT(!glyphRunList.hasRSXForm());
 
     #if defined(SK_EXPERIMENTAL_SIMULATE_DRAWGLYPHRUNLIST_WITH_SLUG)
-        auto slug = this->convertGlyphRunListToSlug(glyphRunList, paint);
-        if (slug != nullptr) {
-            this->drawSlug(slug.get());
-        }
-        return;
-    #endif
-
+    this->testingOnly_drawGlyphRunListWithSlug(canvas, glyphRunList, paint);
+    #elif defined(SK_EXPERIMENTAL_SIMULATE_DRAWGLYPHRUNLIST_WITH_SLUG_SERIALIZE)
+    this->testingOnly_drawGlyphRunListWithSerializedSlug(canvas, glyphRunList, paint);
+    #else
     fSurfaceDrawContext->drawGlyphRunList(
-        canvas, this->clip(), this->asMatrixProvider(), glyphRunList, paint);
+            canvas, this->clip(), this->asMatrixProvider(), glyphRunList, paint);
+    #endif
 }
 #endif
 
@@ -1139,7 +1177,8 @@ SkBaseDevice* Device::onCreateDevice(const CreateInfo& cinfo, const SkPaint*) {
             fContext.get(), SkColorTypeToGrColorType(cinfo.fInfo.colorType()),
             fSurfaceDrawContext->colorInfo().refColorSpace(), fit, cinfo.fInfo.dimensions(), props,
             fSurfaceDrawContext->numSamples(), GrMipmapped::kNo,
-            fSurfaceDrawContext->asSurfaceProxy()->isProtected(), kBottomLeft_GrSurfaceOrigin,
+            fSurfaceDrawContext->asSurfaceProxy()->isProtected(),
+            fSurfaceDrawContext->origin(),
             SkBudgeted::kYes);
     if (!sdc) {
         return nullptr;

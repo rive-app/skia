@@ -775,6 +775,18 @@ std::unique_ptr<SkStreamAsset> SkTypeface_Mac::onOpenStream(int* ttcIndex) const
     return fStream->duplicate();
 }
 
+std::unique_ptr<SkStreamAsset> SkTypeface_Mac::onOpenExistingStream(int* ttcIndex) const {
+    *ttcIndex = 0;
+    return fStream ? fStream->duplicate() : nullptr;
+}
+
+bool SkTypeface_Mac::onGlyphMaskNeedsCurrentColor() const {
+    // `CPAL` (`COLR` and `SVG`) fonts may need the current color.
+    // However, even `sbix` fonts can have glyphs which need the current color.
+    // These may be glyphs with paths but no `sbix` entries, which are impossible to distinguish.
+    return this->fHasColorGlyphs;
+}
+
 int SkTypeface_Mac::onGetVariationDesignPosition(
         SkFontArguments::VariationPosition::Coordinate coordinates[], int coordinateCount) const
 {
@@ -860,9 +872,9 @@ int SkTypeface_Mac::onGetTableTags(SkFontTableTag tags[]) const {
     if (!cfArray) {
         return 0;
     }
-    int count = SkToInt(CFArrayGetCount(cfArray.get()));
+    CFIndex count = CFArrayGetCount(cfArray.get());
     if (tags) {
-        for (int i = 0; i < count; ++i) {
+        for (CFIndex i = 0; i < count; ++i) {
             uintptr_t fontTag = reinterpret_cast<uintptr_t>(
                 CFArrayGetValueAtIndex(cfArray.get(), i));
             tags[i] = static_cast<SkFontTableTag>(fontTag);

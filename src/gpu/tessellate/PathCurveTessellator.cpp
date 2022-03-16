@@ -20,33 +20,22 @@
 
 namespace skgpu {
 
-using Conic = PatchWriter::Conic;
-using Cubic = PatchWriter::Cubic;
-using Quadratic = PatchWriter::Quadratic;
+namespace {
 
-int PathCurveTessellator::patchPreallocCount(int totalCombinedPathVerbCnt) const {
-    // Over-allocate enough curves for 1 in 4 to chop.
-    int approxNumChops = (totalCombinedPathVerbCnt + 3) / 4;
-    // Every chop introduces 2 new patches: another curve patch and a triangle patch that glues the
-    // two chops together.
-    return totalCombinedPathVerbCnt + approxNumChops * 2;
-}
+using Writer = PatchWriter<GrVertexChunkBuilder,
+                           Optional<PatchAttribs::kColor>,
+                           Optional<PatchAttribs::kWideColorIfEnabled>,
+                           Optional<PatchAttribs::kExplicitCurveType>,
+                           AddTrianglesWhenChopping,
+                           DiscardFlatCurves>;
 
-void PathCurveTessellator::writePatches(PatchWriter& patchWriter,
-                                        int maxTessellationSegments,
-                                        const SkMatrix& shaderMatrix,
-                                        const PathDrawList& pathDrawList) {
-    float maxSegments_pow2 = pow2(maxTessellationSegments);
-    float maxSegments_pow4 = pow2(maxSegments_pow2);
-
-    // If using fixed count, this is the number of segments we need to emit per instance. Always
-    // emit at least 2 segments so we can support triangles.
-    float numFixedSegments_pow4 = 2*2*2*2;
-
+int write_patches(Writer&& patchWriter,
+                  const SkMatrix& shaderMatrix,
+                  const PathTessellator::PathDrawList& pathDrawList) {
+    wangs_formula::VectorXform shaderXform(shaderMatrix);
     for (auto [pathMatrix, path, color] : pathDrawList) {
         AffineMatrix m(pathMatrix);
-        wangs_formula::VectorXform totalXform(SkMatrix::Concat(shaderMatrix, pathMatrix));
-        if (fAttribs & PatchAttribs::kColor) {
+        if (patchWriter.attribs() & PatchAttribs::kColor) {
             patchWriter.updateColorAttrib(color);
         }
         for (auto [verb, pts, w] : SkPathPriv::Iterate(path)) {
@@ -54,75 +43,24 @@ void PathCurveTessellator::writePatches(PatchWriter& patchWriter,
                 case SkPathVerb::kQuad: {
                     auto [p0, p1] = m.map2Points(pts);
                     auto p2 = m.map1Point(pts+2);
-                    float n4 = wangs_formula::quadratic_pow4(kTessellationPrecision,
-                                                             pts,
-                                                             totalXform);
-                    if (n4 <= 1) {
-                        break;  // This quad only needs 1 segment, which is empty.
-                    }
-                    if (n4 <= maxSegments_pow4) {
-                        // This quad already fits in "maxTessellationSegments".
-                        patchWriter << Quadratic(p0, p1, p2);
-                    } else {
-                        // The path should have been pre-chopped if needed, so all curves fit in
-                        // kMaxTessellationSegmentsPerCurve.
-                        n4 = std::min(n4, pow4(kMaxTessellationSegmentsPerCurve));
-                        // Chop until each quad tessellation requires "maxSegments" or fewer.
-                        int numPatches =
-                                SkScalarCeilToInt(wangs_formula::root4(n4/maxSegments_pow4));
-                        patchWriter.chopAndWriteQuads(p0, p1, p2, numPatches);
-                    }
-                    numFixedSegments_pow4 = std::max(n4, numFixedSegments_pow4);
+
+                    patchWriter.writeQuadratic(p0, p1, p2, shaderXform);
                     break;
                 }
 
                 case SkPathVerb::kConic: {
                     auto [p0, p1] = m.map2Points(pts);
                     auto p2 = m.map1Point(pts+2);
-                    float n2 = wangs_formula::conic_pow2(kTessellationPrecision,
-                                                         pts,
-                                                         *w,
-                                                         totalXform);
-                    if (n2 <= 1) {
-                        break;  // This conic only needs 1 segment, which is empty.
-                    }
-                    if (n2 <= maxSegments_pow2) {
-                        // This conic already fits in "maxTessellationSegments".
-                        patchWriter << Conic(p0, p1, p2, *w);
-                    } else {
-                        // The path should have been pre-chopped if needed, so all curves fit in
-                        // kMaxTessellationSegmentsPerCurve.
-                        n2 = std::min(n2, pow2(kMaxTessellationSegmentsPerCurve));
-                        // Chop until each conic tessellation requires "maxSegments" or fewer.
-                        int numPatches = SkScalarCeilToInt(sqrtf(n2/maxSegments_pow2));
-                        patchWriter.chopAndWriteConics(p0, p1, p2, *w, numPatches);
-                    }
-                    numFixedSegments_pow4 = std::max(n2*n2, numFixedSegments_pow4);
+
+                    patchWriter.writeConic(p0, p1, p2, *w, shaderXform);
                     break;
                 }
 
                 case SkPathVerb::kCubic: {
                     auto [p0, p1] = m.map2Points(pts);
                     auto [p2, p3] = m.map2Points(pts+2);
-                    float n4 = wangs_formula::cubic_pow4(kTessellationPrecision,
-                                                         pts,
-                                                         totalXform);
-                    if (n4 <= 1) {
-                        break;  // This cubic only needs 1 segment, which is empty.
-                    }
-                    if (n4 <= maxSegments_pow4) {
-                        // This cubic already fits in "maxTessellationSegments".
-                        patchWriter << Cubic(p0, p1, p2, p3);
-                    } else {
-                        // The path should have been pre-chopped if needed, so all curves fit in
-                        // kMaxTessellationSegmentsPerCurve.
-                        n4 = std::min(n4, pow4(kMaxTessellationSegmentsPerCurve));
-                        // Chop until each cubic tessellation requires "maxSegments" or fewer.
-                        int numPatches =
-                                SkScalarCeilToInt(wangs_formula::root4(n4/maxSegments_pow4));
-                        patchWriter.chopAndWriteCubics(p0, p1, p2, p3, numPatches);
-                    }
-                    numFixedSegments_pow4 = std::max(n4, numFixedSegments_pow4);
+
+                    patchWriter.writeCubic(p0, p1, p2, p3, shaderXform);
                     break;
                 }
 
@@ -131,13 +69,10 @@ void PathCurveTessellator::writePatches(PatchWriter& patchWriter,
         }
     }
 
-    // log16(n^4) == log2(n).
-    // We already chopped curves to make sure none needed a higher resolveLevel than
-    // kMaxFixedResolveLevel.
-    fFixedResolveLevel = SkTPin(wangs_formula::nextlog16(numFixedSegments_pow4),
-                                fFixedResolveLevel,
-                                int(kMaxFixedResolveLevel));
+    return patchWriter.requiredResolveLevel();
 }
+
+}  // namespace
 
 void PathCurveTessellator::WriteFixedVertexBuffer(VertexWriter vertexWriter, size_t bufferSize) {
     SkASSERT(bufferSize >= sizeof(SkPoint) * 2);
@@ -221,6 +156,50 @@ void PathCurveTessellator::WriteFixedIndexBufferBaseIndex(VertexWriter vertexWri
 
 SKGPU_DECLARE_STATIC_UNIQUE_KEY(gFixedVertexBufferKey);
 SKGPU_DECLARE_STATIC_UNIQUE_KEY(gFixedIndexBufferKey);
+
+void PathCurveTessellator::prepareWithTriangles(
+        GrMeshDrawTarget* target,
+        int maxTessellationSegments,
+        const SkMatrix& shaderMatrix,
+        GrInnerFanTriangulator::BreadcrumbTriangleList* extraTriangles,
+        const PathDrawList& pathDrawList,
+        int totalCombinedPathVerbCnt,
+        bool willUseTessellationShaders) {
+    int patchPreallocCount = PatchPreallocCount(totalCombinedPathVerbCnt) +
+                             (extraTriangles ? extraTriangles->count() : 0);
+    if (patchPreallocCount) {
+        Writer writer{fAttribs, maxTessellationSegments,
+                      target, &fVertexChunkArray, patchPreallocCount};
+
+        // Write out extra space-filling triangles to connect the curve patches with any external
+        // source of geometry (e.g. inner triangulation that handles winding explicitly).
+        if (extraTriangles) {
+            SkDEBUGCODE(int breadcrumbCount = 0;)
+            for (const auto* tri = extraTriangles->head(); tri; tri = tri->fNext) {
+                SkDEBUGCODE(++breadcrumbCount;)
+                auto p0 = float2::Load(tri->fPts);
+                auto p1 = float2::Load(tri->fPts + 1);
+                auto p2 = float2::Load(tri->fPts + 2);
+                if (skvx::any((p0 == p1) & (p1 == p2))) {
+                    // Cull completely horizontal or vertical triangles. GrTriangulator can't always
+                    // get these breadcrumb edges right when they run parallel to the sweep
+                    // direction because their winding is undefined by its current definition.
+                    // FIXME(skia:12060): This seemed safe, but if there is a view matrix it will
+                    // introduce T-junctions.
+                    continue;
+                }
+                writer.writeTriangle(p0, p1, p2);
+            }
+            SkASSERT(breadcrumbCount == extraTriangles->count());
+        }
+
+        int resolveLevel = write_patches(std::move(writer), shaderMatrix, pathDrawList);
+        this->updateResolveLevel(resolveLevel);
+    }
+    if (!willUseTessellationShaders) {
+        this->prepareFixedCountBuffers(target);
+    }
+}
 
 void PathCurveTessellator::prepareFixedCountBuffers(GrMeshDrawTarget* target) {
     GrResourceProvider* rp = target->resourceProvider();

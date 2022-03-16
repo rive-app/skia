@@ -20,13 +20,13 @@ bool ChildCall::hasProperty(Property property) const {
 }
 
 std::unique_ptr<Expression> ChildCall::clone() const {
-    return std::make_unique<ChildCall>(fLine, &this->type(), &this->child(),
+    return std::make_unique<ChildCall>(fPosition, &this->type(), &this->child(),
                                        this->arguments().clone());
 }
 
-String ChildCall::description() const {
-    String result = String(this->child().name()) + ".eval(";
-    String separator;
+std::string ChildCall::description() const {
+    std::string result = std::string(this->child().name()) + ".eval(";
+    std::string separator;
     for (const std::unique_ptr<Expression>& arg : this->arguments()) {
         result += separator;
         result += arg->description();
@@ -64,12 +64,12 @@ String ChildCall::description() const {
 }
 
 std::unique_ptr<Expression> ChildCall::Make(const Context& context,
-                                            int line,
+                                            Position pos,
                                             const Type* returnType,
                                             const Variable& child,
                                             ExpressionArray arguments) {
     SkASSERT(call_signature_is_valid(context, child, arguments));
-    return std::make_unique<ChildCall>(line, returnType, &child, std::move(arguments));
+    return std::make_unique<ChildCall>(pos, returnType, &child, std::move(arguments));
 }
 
 }  // namespace SkSL

@@ -7,46 +7,42 @@
 
 #include "src/core/SkKeyHelpers.h"
 
-#include "include/private/SkPaintParamsKey.h"
 #include "src/core/SkDebugUtils.h"
+#include "src/core/SkKeyContext.h"
+#include "src/core/SkPaintParamsKey.h"
+#include "src/core/SkPipelineData.h"
+#include "src/core/SkShaderCodeDictionary.h"
+#include "src/core/SkUniform.h"
 #include "src/shaders/SkShaderBase.h"
+
+#ifdef SK_GRAPHITE_ENABLED
+#include "experimental/graphite/src/TextureProxy.h"
+#include "experimental/graphite/src/UniformManager.h"
+#include "src/gpu/Blend.h"
+#endif
+
+constexpr SkPMColor4f kErrorColor = { 1, 0, 0, 1 };
 
 namespace {
 
-#ifdef SK_DEBUG
-CodeSnippetID read_code_snippet_id(const SkPaintParamsKey& key, int headerOffset) {
-    uint8_t byte = key.byte(headerOffset);
-
-    SkASSERT(byte <= static_cast<int>(CodeSnippetID::kLast));
-
-    return static_cast<CodeSnippetID>(byte);
-}
-#endif
-
 // This can be used to catch errors in blocks that have a fixed, known block data size
-void validate_block_header(const SkPaintParamsKey& key, int headerOffset,
-                           CodeSnippetID codeSnippetID, int blockDataSize) {
-    SkASSERT(key.byte(headerOffset) == static_cast<int>(codeSnippetID));
-    SkASSERT(key.byte(headerOffset+SkPaintParamsKey::kBlockSizeOffsetInBytes) ==
-             SkPaintParamsKey::kBlockHeaderSizeInBytes + blockDataSize);
+void validate_block_header(const SkPaintParamsKeyBuilder* builder,
+                           SkBuiltInCodeSnippetID codeSnippetID,
+                           int blockDataSize) {
+    SkDEBUGCODE(int fullBlockSize = SkPaintParamsKey::kBlockHeaderSizeInBytes + blockDataSize;)
+    SkDEBUGCODE(int headerOffset = builder->sizeInBytes() - fullBlockSize;)
+    SkASSERT(builder->byte(headerOffset) == static_cast<int>(codeSnippetID));
+    SkASSERT(builder->byte(headerOffset+SkPaintParamsKey::kBlockSizeOffsetInBytes) ==
+             fullBlockSize);
 }
 
-void add_blendmode_to_key(SkPaintParamsKey* key, SkBlendMode bm) {
-    SkASSERT(static_cast<int>(bm) <= std::numeric_limits<uint8_t>::max());
-    key->addByte(static_cast<uint8_t>(bm));
+#ifdef SK_GRAPHITE_ENABLED
+void add_blendmode_to_key(SkPaintParamsKeyBuilder* builder, SkBlendMode bm) {
+    static_assert(SkTFitsIn<uint8_t>(static_cast<int>(SkBlendMode::kLastMode)));
+    builder->addByte(static_cast<uint8_t>(bm));
 }
 
-#ifdef SK_DEBUG
-SkBlendMode to_blendmode(uint8_t data) {
-    SkASSERT(data <= static_cast<int>(SkBlendMode::kLastMode));
-    return static_cast<SkBlendMode>(data);
-}
-
-SkTileMode to_tilemode(uint8_t data) {
-    SkASSERT(data <= static_cast<int>(SkTileMode::kLastTileMode));
-    return static_cast<SkTileMode>(data);
-}
-#endif
+#endif // SK_GRAPHITE_ENABLED
 
 } // anonymous namespace
 
@@ -55,57 +51,187 @@ namespace DepthStencilOnlyBlock {
 
 static const int kBlockDataSize = 0;
 
-void AddToKey(SkBackend /* backend */,
-              SkPaintParamsKey* key,
-              SkUniformBlock* /* uniforms */) {
-    int headerOffset = key->beginBlock(CodeSnippetID::kDepthStencilOnlyDraw);
-    key->endBlock(headerOffset, CodeSnippetID::kDepthStencilOnlyDraw);
+void AddToKey(const SkKeyContext& /* keyContext */,
+              SkPaintParamsKeyBuilder* builder,
+              SkPipelineData* /* pipelineData */) {
+    builder->beginBlock(SkBuiltInCodeSnippetID::kDepthStencilOnlyDraw);
+    builder->endBlock();
 
-    validate_block_header(*key, headerOffset,
-                          CodeSnippetID::kDepthStencilOnlyDraw, kBlockDataSize);
+    validate_block_header(builder,
+                          SkBuiltInCodeSnippetID::kDepthStencilOnlyDraw,
+                          kBlockDataSize);
 }
-
-#ifdef SK_DEBUG
-void Dump(const SkPaintParamsKey& key, int headerOffset) {
-    validate_block_header(key, headerOffset,
-                          CodeSnippetID::kDepthStencilOnlyDraw, kBlockDataSize);
-
-    SkDebugf("kDepthStencilOnlyDraw\n");
-}
-#endif
 
 } // namespace DepthStencilOnlyBlock
 
 //--------------------------------------------------------------------------------------------------
 namespace SolidColorShaderBlock {
 
+namespace {
+
+#ifdef SK_GRAPHITE_ENABLED
 static const int kBlockDataSize = 0;
 
-void AddToKey(SkBackend /* backend */,
-              SkPaintParamsKey* key,
-              SkUniformBlock* uniforms,
-              const SkColor4f& color) {
-    int headerOffset = key->beginBlock(CodeSnippetID::kSolidColorShader);
-    key->endBlock(headerOffset, CodeSnippetID::kSolidColorShader);
+sk_sp<SkUniformData> make_solid_uniform_data(SkShaderCodeDictionary* dict,
+                                             const SkPMColor4f& premulColor) {
+    static constexpr size_t kExpectedNumUniforms = 1;
 
-    validate_block_header(*key, headerOffset,
-                          CodeSnippetID::kSolidColorShader, kBlockDataSize);
+    SkSpan<const SkUniform> uniforms = dict->getUniforms(SkBuiltInCodeSnippetID::kSolidColorShader);
+    SkASSERT(uniforms.size() == kExpectedNumUniforms);
+
+    skgpu::UniformManager mgr(skgpu::Layout::kMetal);
+
+    size_t dataSize = mgr.writeUniforms(uniforms, nullptr, nullptr, nullptr);
+
+    sk_sp<SkUniformData> result = SkUniformData::Make(uniforms, dataSize);
+
+    const void* srcs[kExpectedNumUniforms] = { &premulColor };
+
+    mgr.writeUniforms(result->uniforms(), srcs, result->offsets(), result->data());
+    return result;
 }
+#endif // SK_GRAPHITE_ENABLED
 
-#ifdef SK_DEBUG
-void Dump(const SkPaintParamsKey& key, int headerOffset) {
-    validate_block_header(key, headerOffset,
-                          CodeSnippetID::kSolidColorShader, kBlockDataSize);
+} // anonymous namespace
 
-    SkDebugf("kSolidColorShader\n");
+void AddToKey(const SkKeyContext& keyContext,
+              SkPaintParamsKeyBuilder* builder,
+              SkPipelineData* pipelineData,
+              const SkPMColor4f& premulColor) {
+
+#ifdef SK_GRAPHITE_ENABLED
+    if (builder->backend() == SkBackend::kGraphite) {
+        auto dict = keyContext.dict();
+
+        builder->beginBlock(SkBuiltInCodeSnippetID::kSolidColorShader);
+        builder->endBlock();
+
+        validate_block_header(builder,
+                              SkBuiltInCodeSnippetID::kSolidColorShader,
+                              kBlockDataSize);
+
+        if (pipelineData) {
+            pipelineData->add(make_solid_uniform_data(dict, premulColor));
+        }
+        return;
+    }
+#endif // SK_GRAPHITE_ENABLED
+
+    if (builder->backend() == SkBackend::kSkVM || builder->backend() == SkBackend::kGanesh) {
+        // TODO: add implementation of other backends
+    }
+
 }
-#endif
 
 } // namespace SolidColorShaderBlock
 
 //--------------------------------------------------------------------------------------------------
 namespace GradientShaderBlocks {
 
+namespace {
+
+#ifdef SK_GRAPHITE_ENABLED
+static const int kBlockDataSize = 1;
+static const int kExpectedNumGradientUniforms = 7;
+
+sk_sp<SkUniformData> make_gradient_uniform_data_common(
+        SkSpan<const SkUniform> uniforms,
+        const void* srcs[kExpectedNumGradientUniforms]) {
+    skgpu::UniformManager mgr(skgpu::Layout::kMetal);
+
+    // TODO: Given that, for the sprint, we always know the uniforms we could cache 'dataSize'
+    // for each layout and skip the first call.
+    size_t dataSize = mgr.writeUniforms(uniforms, nullptr, nullptr, nullptr);
+
+    sk_sp<SkUniformData> result = SkUniformData::Make(uniforms, dataSize);
+
+    mgr.writeUniforms(result->uniforms(), srcs, result->offsets(), result->data());
+    return result;
+}
+
+sk_sp<SkUniformData> make_linear_gradient_uniform_data(SkShaderCodeDictionary* dict,
+                                                       const GradientData& gradData) {
+
+    auto uniforms = dict->getUniforms(SkBuiltInCodeSnippetID::kLinearGradientShader);
+    SkASSERT(uniforms.size() == kExpectedNumGradientUniforms);
+
+    SkPoint padding{0, 0};
+    const void* srcs[kExpectedNumGradientUniforms] = {
+        gradData.fColor4fs,
+        gradData.fOffsets,
+        &gradData.fPoints[0],
+        &gradData.fPoints[1],
+        &gradData.fRadii[0], // unused
+        &gradData.fRadii[1], // unused
+        &padding
+    };
+
+    return make_gradient_uniform_data_common(uniforms, srcs);
+};
+
+sk_sp<SkUniformData> make_radial_gradient_uniform_data(SkShaderCodeDictionary* dict,
+                                                       const GradientData& gradData) {
+
+    auto uniforms = dict->getUniforms(SkBuiltInCodeSnippetID::kRadialGradientShader);
+    SkASSERT(uniforms.size() == kExpectedNumGradientUniforms);
+
+    SkPoint padding{0, 0};
+    const void* srcs[kExpectedNumGradientUniforms] = {
+        gradData.fColor4fs,
+        gradData.fOffsets,
+        &gradData.fPoints[0],
+        &gradData.fPoints[1], // unused
+        &gradData.fRadii[0],
+        &gradData.fRadii[1],  // unused
+        &padding
+    };
+
+    return make_gradient_uniform_data_common(uniforms, srcs);
+};
+
+sk_sp<SkUniformData> make_sweep_gradient_uniform_data(SkShaderCodeDictionary* dict,
+                                                      const GradientData& gradData) {
+
+    auto uniforms = dict->getUniforms(SkBuiltInCodeSnippetID::kSweepGradientShader);
+    SkASSERT(uniforms.size() == kExpectedNumGradientUniforms);
+
+    SkPoint padding{0, 0};
+    const void* srcs[kExpectedNumGradientUniforms] = {
+        gradData.fColor4fs,
+        gradData.fOffsets,
+        &gradData.fPoints[0],
+        &gradData.fPoints[1], // unused
+        &gradData.fRadii[0],  // unused
+        &gradData.fRadii[1],  // unused
+        &padding
+    };
+
+    return make_gradient_uniform_data_common(uniforms, srcs);
+};
+
+sk_sp<SkUniformData> make_conical_gradient_uniform_data(SkShaderCodeDictionary* dict,
+                                                        const GradientData& gradData) {
+
+    auto uniforms = dict->getUniforms(SkBuiltInCodeSnippetID::kConicalGradientShader);
+    SkASSERT(uniforms.size() == kExpectedNumGradientUniforms);
+
+    SkPoint padding{0, 0};
+    const void* srcs[kExpectedNumGradientUniforms] = {
+        gradData.fColor4fs,
+        gradData.fOffsets,
+        &gradData.fPoints[0],
+        &gradData.fPoints[1],
+        &gradData.fRadii[0],
+        &gradData.fRadii[1],
+        &padding,
+    };
+
+    return make_gradient_uniform_data_common(uniforms, srcs);
+};
+
+#endif // SK_GRAPHITE_ENABLED
+
+} // anonymous namespace
 
 GradientData::GradientData(SkShader::GradientType type,
                            SkTileMode tm,
@@ -120,69 +246,71 @@ GradientData::GradientData(SkShader::GradientType type,
 }
 
 GradientData::GradientData(SkShader::GradientType type,
-                           SkPoint points[2],
-                           float radii[2],
+                           SkPoint point0, SkPoint point1,
+                           float radius0, float radius1,
                            SkTileMode tm,
                            int numStops,
-                           SkColor colors[kMaxStops],
-                           float offsets[kMaxStops])
+                           SkColor4f* color4fs,
+                           float* offsets)
         : fType(type)
         , fTM(tm)
-        , fNumStops(numStops) {
-    memcpy(fPoints, points, sizeof(fPoints));
-    memcpy(fRadii, radii, sizeof(fRadii));
-    this->toColor4fs(fNumStops, colors);
-    this->toOffsets(fNumStops, offsets);
-}
+        , fNumStops(std::min(numStops, kMaxStops)) {
+    SkASSERT(fNumStops >= 1);
 
-void GradientData::toColor4fs(int numColors, SkColor colors[kMaxStops]) {
-    if (numColors < 2 || numColors > kMaxStops) {
-        sk_bzero(fColor4fs, sizeof(fColor4fs));
-        return;
+    fPoints[0] = point0;
+    fPoints[1] = point1;
+    fRadii[0] = radius0;
+    fRadii[1] = radius1;
+    memcpy(fColor4fs, color4fs, fNumStops * sizeof(SkColor4f));
+    if (offsets) {
+        memcpy(fOffsets, offsets, fNumStops * sizeof(float));
+    } else {
+        for (int i = 0; i < fNumStops; ++i) {
+            fOffsets[i] = SkIntToFloat(i) / (fNumStops-1);
+        }
     }
 
-    int i;
-    for (i = 0; i < numColors; ++i) {
-        fColor4fs[i] = SkColor4f::FromColor(colors[i]);
-    }
-    for ( ; i < kMaxStops; ++i) {
-        fColor4fs[i] = fColor4fs[numColors-1];
-    }
-}
-
-void GradientData::toOffsets(int numStops, float inputOffsets[kMaxStops]) {
-    if (numStops < 2 || numStops > kMaxStops) {
-        sk_bzero(fOffsets, sizeof(fOffsets));
-        return;
-    }
-
-    memcpy(fOffsets, inputOffsets, numStops * sizeof(float));
-    for (int i = numStops ; i < kMaxStops; ++i) {
-        fOffsets[i] = fOffsets[numStops-1];
+    // Extend the colors and offset, if necessary, to fill out the arrays
+    // TODO: this should be done later when the actual code snippet has been selected!!
+    for (int i = fNumStops ; i < kMaxStops; ++i) {
+        fColor4fs[i] = fColor4fs[fNumStops-1];
+        fOffsets[i] = fOffsets[fNumStops-1];
     }
 }
 
-static const int kBlockDataSize = 1;
-
-void AddToKey(SkBackend backend,
-              SkPaintParamsKey *key,
-              SkUniformBlock* uniforms,
+void AddToKey(const SkKeyContext& keyContext,
+              SkPaintParamsKeyBuilder *builder,
+              SkPipelineData* pipelineData,
               const GradientData& gradData) {
 
-    if (backend == SkBackend::kGraphite) {
-        CodeSnippetID codeSnippetID = CodeSnippetID::kSolidColorShader;
+#ifdef SK_GRAPHITE_ENABLED
+    if (builder->backend() == SkBackend::kGraphite) {
+        auto dict = keyContext.dict();
+        SkBuiltInCodeSnippetID codeSnippetID = SkBuiltInCodeSnippetID::kSolidColorShader;
         switch (gradData.fType) {
             case SkShader::kLinear_GradientType:
-                codeSnippetID = CodeSnippetID::kLinearGradientShader;
+                codeSnippetID = SkBuiltInCodeSnippetID::kLinearGradientShader;
+                if (pipelineData) {
+                    pipelineData->add(make_linear_gradient_uniform_data(dict, gradData));
+                }
                 break;
             case SkShader::kRadial_GradientType:
-                codeSnippetID = CodeSnippetID::kRadialGradientShader;
+                codeSnippetID = SkBuiltInCodeSnippetID::kRadialGradientShader;
+                if (pipelineData) {
+                    pipelineData->add(make_radial_gradient_uniform_data(dict, gradData));
+                }
                 break;
             case SkShader::kSweep_GradientType:
-                codeSnippetID = CodeSnippetID::kSweepGradientShader;
+                codeSnippetID = SkBuiltInCodeSnippetID::kSweepGradientShader;
+                if (pipelineData) {
+                    pipelineData->add(make_sweep_gradient_uniform_data(dict, gradData));
+                }
                 break;
             case SkShader::GradientType::kConical_GradientType:
-                codeSnippetID = CodeSnippetID::kConicalGradientShader;
+                codeSnippetID = SkBuiltInCodeSnippetID::kConicalGradientShader;
+                if (pipelineData) {
+                    pipelineData->add(make_conical_gradient_uniform_data(dict, gradData));
+                }
                 break;
             case SkShader::GradientType::kColor_GradientType:
             case SkShader::GradientType::kNone_GradientType:
@@ -191,253 +319,327 @@ void AddToKey(SkBackend backend,
                 break;
         }
 
-        int headerOffset = key->beginBlock(codeSnippetID);
+        builder->beginBlock(codeSnippetID);
 
         SkASSERT(static_cast<int>(gradData.fTM) <= std::numeric_limits<uint8_t>::max());
-        key->addByte(static_cast<uint8_t>(gradData.fTM));
+        builder->addByte(static_cast<uint8_t>(gradData.fTM));
 
-        key->endBlock(headerOffset, codeSnippetID);
+        builder->endBlock();
 
-        validate_block_header(*key, headerOffset, codeSnippetID, kBlockDataSize);
-    } else {
+        validate_block_header(builder, codeSnippetID, kBlockDataSize);
+        return;
+    }
+#endif // SK_GRAPHITE_ENABLED
+
+    if (builder->backend() == SkBackend::kSkVM || builder->backend() == SkBackend::kGanesh) {
         // TODO: add implementation of other backends
-        SolidColorShaderBlock::AddToKey(backend, key, uniforms, SkColors::kRed);
+        SolidColorShaderBlock::AddToKey(keyContext, builder, pipelineData, kErrorColor);
     }
 }
-
-#ifdef SK_DEBUG
-std::pair<CodeSnippetID, SkTileMode> ExtractFromKey(const SkPaintParamsKey& key,
-                                                    uint32_t headerOffset) {
-    CodeSnippetID id = read_code_snippet_id(key, headerOffset);
-
-    SkASSERT(id == CodeSnippetID::kLinearGradientShader ||
-             id == CodeSnippetID::kRadialGradientShader ||
-             id == CodeSnippetID::kSweepGradientShader ||
-             id == CodeSnippetID::kConicalGradientShader);
-    SkASSERT(key.byte(headerOffset+SkPaintParamsKey::kBlockSizeOffsetInBytes) ==
-             SkPaintParamsKey::kBlockHeaderSizeInBytes+kBlockDataSize);
-
-    uint8_t data = key.byte(headerOffset + SkPaintParamsKey::kBlockHeaderSizeInBytes);
-    SkTileMode tm = to_tilemode(data);
-
-    return { id, tm };
-}
-
-void Dump(const SkPaintParamsKey& key, int headerOffset) {
-    auto [id, tm] =  ExtractFromKey(key, headerOffset);
-
-    switch (id) {
-        case CodeSnippetID::kLinearGradientShader:
-            SkDebugf("kLinearGradientShader: %s\n", SkTileModeToStr(tm));
-            break;
-        case CodeSnippetID::kRadialGradientShader:
-            SkDebugf("kRadialGradientShader: %s\n", SkTileModeToStr(tm));
-            break;
-        case CodeSnippetID::kSweepGradientShader:
-            SkDebugf("kSweepGradientShader: %s\n", SkTileModeToStr(tm));
-            break;
-        case CodeSnippetID::kConicalGradientShader:
-            SkDebugf("kConicalGradientShader: %s\n", SkTileModeToStr(tm));
-            break;
-        default:
-            SkDebugf("Unknown!!\n");
-            break;
-    }
-}
-#endif
 
 } // namespace GradientShaderBlocks
 
 //--------------------------------------------------------------------------------------------------
 namespace ImageShaderBlock {
 
-inline static constexpr int kTileModeBits = 2;
+namespace {
 
-static const int kXTileModeShift = 0;
-static const int kYTileModeShift = kTileModeBits;
+#ifdef SK_GRAPHITE_ENABLED
 
-#ifdef SK_DEBUG
-static const int kBlockDataSize = 1;
+sk_sp<SkUniformData> make_image_uniform_data(SkShaderCodeDictionary* dict,
+                                             const ImageData& imgData) {
+    static constexpr size_t kExpectedNumUniforms = 1;
 
-inline static constexpr int kTileModeMask = 0x3;
+    SkSpan<const SkUniform> uniforms = dict->getUniforms(SkBuiltInCodeSnippetID::kImageShader);
+    SkASSERT(uniforms.size() == kExpectedNumUniforms);
 
-ImageData ExtractFromKey(const SkPaintParamsKey& key, uint32_t headerOffset) {
-    validate_block_header(key, headerOffset,
-                          CodeSnippetID::kImageShader, kBlockDataSize);
+    skgpu::UniformManager mgr(skgpu::Layout::kMetal);
 
-    uint8_t data = key.byte(headerOffset+SkPaintParamsKey::kBlockHeaderSizeInBytes);
+    size_t dataSize = mgr.writeUniforms(uniforms, nullptr, nullptr, nullptr);
 
-    SkTileMode tmX = to_tilemode(((data) >> kXTileModeShift) & kTileModeMask);
-    SkTileMode tmY = to_tilemode(((data) >> kYTileModeShift) & kTileModeMask);
+    sk_sp<SkUniformData> result = SkUniformData::Make(uniforms, dataSize);
 
-    return { tmX, tmY };
+    // TODO: add the required data to ImageData and assemble the uniforms here
+    const void* srcs[kExpectedNumUniforms] = { &imgData.fSubset };
+
+    mgr.writeUniforms(result->uniforms(), srcs, result->offsets(), result->data());
+    return result;
 }
-#endif
 
-void AddToKey(SkBackend backend,
-              SkPaintParamsKey* key,
-              SkUniformBlock* uniforms,
+#endif // SK_GRAPHITE_ENABLED
+
+} // anonymous namespace
+
+ImageData::ImageData(const SkSamplingOptions& sampling,
+                     SkTileMode tileModeX,
+                     SkTileMode tileModeY,
+                     SkRect subset)
+    : fSampling(sampling)
+    , fTileModes{tileModeX, tileModeY}
+    , fSubset(subset) {
+}
+
+void AddToKey(const SkKeyContext& keyContext,
+              SkPaintParamsKeyBuilder* builder,
+              SkPipelineData* pipelineData,
               const ImageData& imgData) {
 
-    if (backend == SkBackend::kGraphite) {
+#ifdef SK_GRAPHITE_ENABLED
+    if (builder->backend() == SkBackend::kGraphite) {
+        if (pipelineData && !imgData.fTextureProxy) {
+            // We're dropping the ImageShader here. This could be an instance of trying to draw
+            // a raster-backed image w/ a Graphite-backed canvas.
+            // TODO: At some point the pre-compile path should also be creating a texture
+            // proxy (i.e., we can remove the 'pipelineData' in the above test).
+            SolidColorShaderBlock::AddToKey(keyContext, builder, pipelineData, kErrorColor);
+            return;
+        }
 
-        uint8_t data = (static_cast<uint8_t>(imgData.fTileModes[0]) << kXTileModeShift) |
-                       (static_cast<uint8_t>(imgData.fTileModes[1]) << kYTileModeShift);
+        auto dict = keyContext.dict();
+        builder->beginBlock(SkBuiltInCodeSnippetID::kImageShader);
 
-        int headerOffset = key->beginBlock(CodeSnippetID::kImageShader);
+        // TODO: bytes are overkill for just tilemodes. We could add smaller/bit-width
+        // types.
+        static_assert(SkTFitsIn<uint8_t>(SkTileMode::kLastTileMode));
+        builder->addByte(static_cast<uint8_t>(imgData.fTileModes[0]));
+        builder->addByte(static_cast<uint8_t>(imgData.fTileModes[1]));
 
-        key->addByte(data);
+        builder->endBlock();
 
-        key->endBlock(headerOffset, CodeSnippetID::kImageShader);
+        if (pipelineData) {
+            pipelineData->addImage(imgData.fSampling,
+                                   imgData.fTileModes,
+                                   std::move(imgData.fTextureProxy));
 
-        SkASSERT(imgData == ExtractFromKey(*key, headerOffset));
-    } else {
+            pipelineData->add(make_image_uniform_data(dict, imgData));
+        }
+
+        return;
+    }
+#endif // SK_GRAPHITE_ENABLED
+
+    if (builder->backend() == SkBackend::kSkVM || builder->backend() == SkBackend::kGanesh) {
         // TODO: add implementation for other backends
-        SolidColorShaderBlock::AddToKey(backend, key, uniforms, SkColors::kRed);
+        SolidColorShaderBlock::AddToKey(keyContext, builder, pipelineData, kErrorColor);
     }
 }
-
-#ifdef SK_DEBUG
-void Dump(const SkPaintParamsKey& key, int headerOffset) {
-    ImageData imgData = ExtractFromKey(key, headerOffset);
-
-    SkDebugf("kImageShader: tileModes(%s, %s) ",
-             SkTileModeToStr(imgData.fTileModes[0]),
-             SkTileModeToStr(imgData.fTileModes[1]));
-}
-#endif
 
 } // namespace ImageShaderBlock
 
 //--------------------------------------------------------------------------------------------------
 namespace BlendShaderBlock {
 
-void AddToKey(SkBackend backend,
-              SkPaintParamsKey *key,
-              SkUniformBlock* uniforms,
+namespace {
+
+#ifdef SK_GRAPHITE_ENABLED
+
+sk_sp<SkUniformData> make_blendshader_uniform_data(SkShaderCodeDictionary* dict, SkBlendMode bm) {
+    static constexpr size_t kExpectedNumUniforms = 4; // actual blend uniform + 3 padding int
+
+    SkSpan<const SkUniform> uniforms = dict->getUniforms(SkBuiltInCodeSnippetID::kBlendShader);
+    SkASSERT(uniforms.size() == kExpectedNumUniforms);
+
+    skgpu::UniformManager mgr(skgpu::Layout::kMetal);
+
+    size_t dataSize = mgr.writeUniforms(uniforms, nullptr, nullptr, nullptr);
+
+    sk_sp<SkUniformData> result = SkUniformData::Make(uniforms, dataSize);
+
+    int tmp = SkTo<int>(bm);
+    const void* srcs[kExpectedNumUniforms] = { &tmp, &tmp, &tmp, &tmp };
+
+    mgr.writeUniforms(result->uniforms(), srcs, result->offsets(), result->data());
+    return result;
+}
+
+#endif // SK_GRAPHITE_ENABLED
+
+} // anonymous namespace
+
+void AddToKey(const SkKeyContext& keyContext,
+              SkPaintParamsKeyBuilder *builder,
+              SkPipelineData* pipelineData,
               const BlendData& blendData) {
 
-    if (backend == SkBackend::kGraphite) {
-        int headerOffset = key->beginBlock(CodeSnippetID::kBlendShader);
+#ifdef SK_GRAPHITE_ENABLED
+    if (builder->backend() == SkBackend::kGraphite) {
+        auto dict = keyContext.dict();
+        // When extracted into SkShaderInfo::SnippetEntries the children will appear after their
+        // parent. Thus, the parent's uniform data must appear in the uniform block before the
+        // uniform data of the children.
+        if (pipelineData) {
+            pipelineData->add(make_blendshader_uniform_data(dict, blendData.fBM));
+        }
 
-        add_blendmode_to_key(key, blendData.fBM);
-        int start = key->sizeInBytes();
-        as_SB(blendData.fDst)->addToKey(nullptr, backend, key, uniforms);
-        int firstShaderSize = key->sizeInBytes() - start;
+        builder->beginBlock(SkBuiltInCodeSnippetID::kBlendShader);
 
-        start = key->sizeInBytes();
-        as_SB(blendData.fSrc)->addToKey(nullptr, backend, key, uniforms);
-        int secondShaderSize = key->sizeInBytes() - start;
+        // Child blocks always go right after the parent block's header
+        // TODO: add startChild/endChild entry points to SkPaintParamsKeyBuilder. They could be
+        // used to compute and store the number of children w/in a block's header.
+        int start = builder->sizeInBytes();
+        as_SB(blendData.fDst)->addToKey(keyContext, builder, pipelineData);
+        int firstShaderSize = builder->sizeInBytes() - start;
 
-        key->endBlock(headerOffset, CodeSnippetID::kBlendShader);
+        start = builder->sizeInBytes();
+        as_SB(blendData.fSrc)->addToKey(keyContext, builder, pipelineData);
+        int secondShaderSize = builder->sizeInBytes() - start;
 
-        int expectedBlockSize = SkPaintParamsKey::kBlockHeaderSizeInBytes +
-                                1 + firstShaderSize + secondShaderSize;
-        validate_block_header(*key, headerOffset, CodeSnippetID::kBlendShader, expectedBlockSize);
-    } else {
+        builder->endBlock();
+
+        int expectedBlockSize = firstShaderSize + secondShaderSize;
+        validate_block_header(builder,
+                              SkBuiltInCodeSnippetID::kBlendShader,
+                              expectedBlockSize);
+        return;
+    }
+#endif // SK_GRAPHITE_ENABLED
+
+    if (builder->backend() == SkBackend::kSkVM || builder->backend() == SkBackend::kGanesh) {
         // TODO: add implementation for other backends
-        SolidColorShaderBlock::AddToKey(backend, key, uniforms, SkColors::kRed);
+        SolidColorShaderBlock::AddToKey(keyContext, builder, pipelineData, kErrorColor);
     }
 }
-
-#ifdef SK_DEBUG
-void Dump(const SkPaintParamsKey& key, int headerOffset) {
-    auto [id, storedBlockSize] = key.readCodeSnippetID(headerOffset);
-    SkASSERT(id == CodeSnippetID::kBlendShader);
-
-    int runningOffset = headerOffset + SkPaintParamsKey::kBlockHeaderSizeInBytes;
-
-    uint8_t data = key.byte(runningOffset);
-    SkBlendMode bm = to_blendmode(data);
-
-    SkDebugf("BlendMode: %s\n", SkBlendMode_Name(bm));
-    runningOffset += 1; // 1 byte for blendmode
-
-    SkDebugf("\nDst:  ");
-    int firstBlockSize = SkPaintParamsKey::DumpBlock(key, runningOffset);
-    runningOffset += firstBlockSize;
-
-    SkDebugf("Src: ");
-    int secondBlockSize = SkPaintParamsKey::DumpBlock(key, runningOffset);
-
-    int calculatedBlockSize = SkPaintParamsKey::kBlockHeaderSizeInBytes +
-                              firstBlockSize + secondBlockSize + 1;
-    SkASSERT(calculatedBlockSize == storedBlockSize);
-}
-#endif
 
 } // namespace BlendShaderBlock
 
 //--------------------------------------------------------------------------------------------------
+#ifdef SK_GRAPHITE_ENABLED
+namespace {
+
+constexpr SkPipelineData::BlendInfo make_simple_blendInfo(skgpu::BlendCoeff srcCoeff,
+                                                          skgpu::BlendCoeff dstCoeff) {
+    return { skgpu::BlendEquation::kAdd,
+             srcCoeff,
+             dstCoeff,
+             SK_PMColor4fTRANSPARENT,
+             skgpu::BlendModifiesDst(skgpu::BlendEquation::kAdd, srcCoeff, dstCoeff) };
+}
+
+/*>> No coverage, input color unknown <<*/
+static constexpr SkPipelineData::BlendInfo gBlendTable[(int)SkBlendMode::kLastCoeffMode + 1] = {
+        /* clear */      make_simple_blendInfo(skgpu::BlendCoeff::kZero, skgpu::BlendCoeff::kZero),
+        /* src */        make_simple_blendInfo(skgpu::BlendCoeff::kOne,  skgpu::BlendCoeff::kZero),
+        /* dst */        make_simple_blendInfo(skgpu::BlendCoeff::kZero, skgpu::BlendCoeff::kOne),
+        /* src-over */   make_simple_blendInfo(skgpu::BlendCoeff::kOne,  skgpu::BlendCoeff::kISA),
+        /* dst-over */   make_simple_blendInfo(skgpu::BlendCoeff::kIDA,  skgpu::BlendCoeff::kOne),
+        /* src-in */     make_simple_blendInfo(skgpu::BlendCoeff::kDA,   skgpu::BlendCoeff::kZero),
+        /* dst-in */     make_simple_blendInfo(skgpu::BlendCoeff::kZero, skgpu::BlendCoeff::kSA),
+        /* src-out */    make_simple_blendInfo(skgpu::BlendCoeff::kIDA,  skgpu::BlendCoeff::kZero),
+        /* dst-out */    make_simple_blendInfo(skgpu::BlendCoeff::kZero, skgpu::BlendCoeff::kISA),
+        /* src-atop */   make_simple_blendInfo(skgpu::BlendCoeff::kDA,   skgpu::BlendCoeff::kISA),
+        /* dst-atop */   make_simple_blendInfo(skgpu::BlendCoeff::kIDA,  skgpu::BlendCoeff::kSA),
+        /* xor */        make_simple_blendInfo(skgpu::BlendCoeff::kIDA,  skgpu::BlendCoeff::kISA),
+        /* plus */       make_simple_blendInfo(skgpu::BlendCoeff::kOne,  skgpu::BlendCoeff::kOne),
+        /* modulate */   make_simple_blendInfo(skgpu::BlendCoeff::kZero, skgpu::BlendCoeff::kSC),
+        /* screen */     make_simple_blendInfo(skgpu::BlendCoeff::kOne,  skgpu::BlendCoeff::kISC)
+};
+
+const SkPipelineData::BlendInfo& get_blend_info(SkBlendMode bm) {
+    if (bm <= SkBlendMode::kLastCoeffMode) {
+        return gBlendTable[(int) bm];
+    }
+
+    return gBlendTable[(int) SkBlendMode::kSrc];
+}
+
+} // anonymous namespace
+#endif // SK_GRAPHITE_ENABLED
+
 namespace BlendModeBlock {
 
-static const int kBlockDataSize = 1;
+#ifdef SK_GRAPHITE_ENABLED
+static const int kFixedFunctionBlockDataSize = 1;
+static const int kShaderBasedBlockDataSize = 1;
+#endif
 
-void AddToKey(SkBackend /* backend */,
-              SkPaintParamsKey *key,
-              SkUniformBlock* uniforms,
+void AddToKey(const SkKeyContext& keyContext,
+              SkPaintParamsKeyBuilder *builder,
+              SkPipelineData* pipelineData,
               SkBlendMode bm) {
 
-    int headerOffset = key->beginBlock(CodeSnippetID::kSimpleBlendMode);
-    add_blendmode_to_key(key, bm);
-    key->endBlock(headerOffset, CodeSnippetID::kSimpleBlendMode);
+#ifdef SK_GRAPHITE_ENABLED
+    if (builder->backend() == SkBackend::kGraphite) {
+        if (bm <= SkBlendMode::kLastCoeffMode) {
+            builder->beginBlock(SkBuiltInCodeSnippetID::kFixedFunctionBlender);
+            add_blendmode_to_key(builder, bm);
+            builder->endBlock();
 
-    validate_block_header(*key, headerOffset,
-                          CodeSnippetID::kSimpleBlendMode, kBlockDataSize);
+            validate_block_header(builder,
+                                  SkBuiltInCodeSnippetID::kFixedFunctionBlender,
+                                  kFixedFunctionBlockDataSize);
+
+            if (pipelineData) {
+                pipelineData->setBlendInfo(get_blend_info(bm));
+            }
+        } else {
+            builder->beginBlock(SkBuiltInCodeSnippetID::kShaderBasedBlender);
+            add_blendmode_to_key(builder, bm);
+            builder->endBlock();
+
+            validate_block_header(builder,
+                                  SkBuiltInCodeSnippetID::kShaderBasedBlender,
+                                  kShaderBasedBlockDataSize);
+
+            if (pipelineData) {
+                // TODO: set up the correct blend info
+                pipelineData->setBlendInfo(SkPipelineData::BlendInfo());
+            }
+        }
+        return;
+    }
+#endif// SK_GRAPHITE_ENABLED
+
+    if (builder->backend() == SkBackend::kSkVM || builder->backend() == SkBackend::kGanesh) {
+        // TODO: add implementation for other backends
+        SolidColorShaderBlock::AddToKey(keyContext, builder, pipelineData, kErrorColor);
+    }
 }
-
-#ifdef SK_DEBUG
-SkBlendMode ExtractFromKey(const SkPaintParamsKey& key, uint32_t headerOffset) {
-    validate_block_header(key, headerOffset,
-                          CodeSnippetID::kSimpleBlendMode, kBlockDataSize);
-
-    uint8_t data = key.byte(headerOffset + SkPaintParamsKey::kBlockHeaderSizeInBytes);
-    return to_blendmode(data);
-}
-
-void Dump(const SkPaintParamsKey& key, int headerOffset) {
-    SkBlendMode bm = ExtractFromKey(key, headerOffset);
-
-    SkDebugf("kSimpleBlendMode: %s\n", SkBlendMode_Name(bm));
-}
-#endif
 
 } // namespace BlendModeBlock
 
 //--------------------------------------------------------------------------------------------------
 #ifdef SK_GRAPHITE_ENABLED
-SkPaintParamsKey CreateKey(SkBackend backend,
-                           skgpu::ShaderCombo::ShaderType s,
-                           SkTileMode tm,
-                           SkBlendMode bm) {
-    SkPaintParamsKey key;
+SkUniquePaintParamsID CreateKey(const SkKeyContext& keyContext,
+                                SkPaintParamsKeyBuilder* builder,
+                                skgpu::ShaderCombo::ShaderType s,
+                                SkTileMode tm,
+                                SkBlendMode bm) {
+    SkDEBUGCODE(builder->checkReset());
 
     switch (s) {
         case skgpu::ShaderCombo::ShaderType::kNone:
-            DepthStencilOnlyBlock::AddToKey(backend, &key, nullptr);
+            DepthStencilOnlyBlock::AddToKey(keyContext, builder, nullptr);
             break;
         case skgpu::ShaderCombo::ShaderType::kSolidColor:
-            SolidColorShaderBlock::AddToKey(backend, &key, nullptr, SkColors::kRed);
+            SolidColorShaderBlock::AddToKey(keyContext, builder, nullptr, kErrorColor);
             break;
         case skgpu::ShaderCombo::ShaderType::kLinearGradient:
-            GradientShaderBlocks::AddToKey(backend, &key, nullptr,
+            GradientShaderBlocks::AddToKey(keyContext, builder, nullptr,
                                            { SkShader::kLinear_GradientType, tm, 0 });
             break;
         case skgpu::ShaderCombo::ShaderType::kRadialGradient:
-            GradientShaderBlocks::AddToKey(backend, &key, nullptr,
+            GradientShaderBlocks::AddToKey(keyContext, builder, nullptr,
                                            { SkShader::kRadial_GradientType, tm, 0 });
             break;
         case skgpu::ShaderCombo::ShaderType::kSweepGradient:
-            GradientShaderBlocks::AddToKey(backend, &key, nullptr,
+            GradientShaderBlocks::AddToKey(keyContext, builder, nullptr,
                                            { SkShader::kSweep_GradientType, tm, 0 });
             break;
         case skgpu::ShaderCombo::ShaderType::kConicalGradient:
-            GradientShaderBlocks::AddToKey(backend, &key, nullptr,
+            GradientShaderBlocks::AddToKey(keyContext, builder, nullptr,
                                            { SkShader::kConical_GradientType, tm, 0 });
             break;
     }
 
-    BlendModeBlock::AddToKey(backend, &key, nullptr, bm);
-    return key;
+    // TODO: the blendInfo should be filled in by BlendModeBlock::AddToKey
+    SkPipelineData::BlendInfo blendInfo = get_blend_info(bm);
+    BlendModeBlock::AddToKey(keyContext, builder, /* pipelineData*/ nullptr, bm);
+    SkPaintParamsKey key = builder->lockAsKey();
+
+    auto dict = keyContext.dict();
+
+    auto entry = dict->findOrCreate(key, blendInfo);
+
+    return  entry->uniqueID();
 }
 #endif

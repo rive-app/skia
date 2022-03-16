@@ -63,7 +63,7 @@ public:
     /**
      * Returns the Settings used by DSL operations in the current thread.
      */
-    static SkSL::ProgramSettings& Settings();
+    static const SkSL::ProgramSettings& Settings();
 
     /**
      * Returns the Program::Inputs used by the current thread.
@@ -99,7 +99,7 @@ public:
     /**
      * Returns the current ProgramConfig.
      */
-    static std::unique_ptr<ProgramConfig>& GetProgramConfig() { return Instance().fConfig; }
+    static const std::unique_ptr<ProgramConfig>& GetProgramConfig() { return Instance().fConfig; }
 
     static bool IsModule() { return GetProgramConfig()->fIsBuiltinCode; }
 
@@ -175,12 +175,12 @@ public:
      * Notifies the current ErrorReporter that an error has occurred. The default error handler
      * prints the message to stderr and aborts.
      */
-    static void ReportError(std::string_view msg, PositionInfo info = PositionInfo::Capture());
+    static void ReportError(std::string_view msg, Position pos = Position::Capture());
 
     /**
      * Forwards any pending errors to the DSL ErrorReporter.
      */
-    static void ReportErrors(PositionInfo pos);
+    static void ReportErrors(Position pos);
 
     static ThreadContext& Instance();
 
@@ -188,7 +188,7 @@ public:
 
 private:
     class DefaultErrorReporter : public ErrorReporter {
-        void handleError(std::string_view msg, PositionInfo pos) override;
+        void handleError(std::string_view msg, Position pos) override;
     };
 
     void setupSymbolTable();

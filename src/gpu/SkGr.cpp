@@ -206,7 +206,7 @@ GrMakeCachedBitmapProxyView(GrRecordingContext* rContext,
         installKey(proxy.get());
     }
 
-    GrSwizzle swizzle = caps->getReadSwizzle(proxy->backendFormat(), ct);
+    skgpu::Swizzle swizzle = caps->getReadSwizzle(proxy->backendFormat(), ct);
     if (mipmapped == GrMipmapped::kNo || proxy->mipmapped() == GrMipmapped::kYes) {
         return {{std::move(proxy), kTopLeft_GrSurfaceOrigin, swizzle}, ct};
     }
@@ -245,7 +245,7 @@ GrMakeUncachedBitmapProxyView(GrRecordingContext* rContext,
     GrColorType ct = choose_bmp_texture_colortype(caps, bitmap);
 
     if (auto proxy = make_bmp_proxy(proxyProvider, bitmap, ct, mipmapped, fit, budgeted)) {
-        GrSwizzle swizzle = caps->getReadSwizzle(proxy->backendFormat(), ct);
+        skgpu::Swizzle swizzle = caps->getReadSwizzle(proxy->backendFormat(), ct);
         SkASSERT(mipmapped == GrMipmapped::kNo || proxy->mipmapped() == GrMipmapped::kYes);
         return {{std::move(proxy), kTopLeft_GrSurfaceOrigin, swizzle}, ct};
     }
@@ -272,7 +272,7 @@ SkColor4f SkColor4fPrepForDst(SkColor4f color, const GrColorInfo& colorInfo) {
 
 static inline bool blender_requires_shader(const SkBlender* blender) {
     SkASSERT(blender);
-    skstd::optional<SkBlendMode> mode = as_BB(blender)->asBlendMode();
+    std::optional<SkBlendMode> mode = as_BB(blender)->asBlendMode();
     return !mode.has_value() || *mode != SkBlendMode::kDst;
 }
 
@@ -296,6 +296,7 @@ static inline float dither_range_for_config(GrColorType dstColorType) {
         case GrColorType::kGrayAlpha_88:
         case GrColorType::kGray_8xxx:
         case GrColorType::kR_8:
+        case GrColorType::kR_8xxx:
         case GrColorType::kRG_88:
         case GrColorType::kRGB_888:
         case GrColorType::kRGB_888x:
@@ -419,7 +420,7 @@ static inline bool skpaint_to_grpaint_impl(
         const GrColorInfo& dstColorInfo,
         const SkPaint& skPaint,
         const SkMatrixProvider& matrixProvider,
-        skstd::optional<std::unique_ptr<GrFragmentProcessor>> shaderFP,
+        std::optional<std::unique_ptr<GrFragmentProcessor>> shaderFP,
         SkBlender* primColorBlender,
         GrPaint* grPaint) {
     // Convert SkPaint color to 4f format in the destination color space
@@ -602,7 +603,7 @@ bool SkPaintToGrPaint(GrRecordingContext* context,
                                    dstColorInfo,
                                    skPaint,
                                    matrixProvider,
-                                   /*shaderFP=*/skstd::nullopt,
+                                   /*shaderFP=*/std::nullopt,
                                    /*primColorBlender=*/nullptr,
                                    grPaint);
 }
@@ -635,7 +636,7 @@ bool SkPaintToGrPaintWithBlend(GrRecordingContext* context,
                                    dstColorInfo,
                                    skPaint,
                                    matrixProvider,
-                                   /*shaderFP=*/skstd::nullopt,
+                                   /*shaderFP=*/std::nullopt,
                                    primColorBlender,
                                    grPaint);
 }

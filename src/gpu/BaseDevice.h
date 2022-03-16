@@ -44,7 +44,7 @@ public:
 
     GrSurfaceProxyView readSurfaceView();
 
-    BaseDevice* asGpuDevice() override { return this; }
+    BaseDevice* asGaneshDevice() override { return this; }
 
 #if SK_GPU_V1
     virtual v1::SurfaceDrawContext* surfaceDrawContext() { return nullptr; }
@@ -58,6 +58,7 @@ public:
                       const GrBackendSemaphore* waitSemaphores,
                       bool deleteSemaphoresAfterWait) = 0;
     virtual void discard() = 0;
+    virtual void resolveMSAA() = 0;
 
     virtual bool replaceBackingProxy(SkSurface::ContentChangeMode,
                                      sk_sp<GrRenderTargetProxy>,

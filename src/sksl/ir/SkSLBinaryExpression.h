@@ -27,9 +27,9 @@ class BinaryExpression final : public Expression {
 public:
     inline static constexpr Kind kExpressionKind = Kind::kBinary;
 
-    BinaryExpression(int line, std::unique_ptr<Expression> left, Operator op,
+    BinaryExpression(Position pos, std::unique_ptr<Expression> left, Operator op,
                      std::unique_ptr<Expression> right, const Type* type)
-        : INHERITED(line, kExpressionKind, type)
+        : INHERITED(pos, kExpressionKind, type)
         , fLeft(std::move(left))
         , fOperator(op)
         , fRight(std::move(right)) {
@@ -92,7 +92,7 @@ public:
 
     std::unique_ptr<Expression> clone() const override;
 
-    String description() const override;
+    std::string description() const override;
 
 private:
     static bool CheckRef(const Expression& expr);

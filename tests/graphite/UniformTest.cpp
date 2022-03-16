@@ -12,12 +12,15 @@
 #include "experimental/graphite/src/ContextUtils.h"
 #include "experimental/graphite/src/GlobalCache.h"
 #include "experimental/graphite/src/PaintParams.h"
+#include "experimental/graphite/src/RecorderPriv.h"
 #include "experimental/graphite/src/ResourceProvider.h"
 #include "include/core/SkPaint.h"
 #include "include/effects/SkGradientShader.h"
-#include "include/private/SkShaderCodeDictionary.h"
 #include "include/private/SkUniquePaintParamsID.h"
+#include "src/core/SkKeyContext.h"
 #include "src/core/SkKeyHelpers.h"
+#include "src/core/SkPipelineData.h"
+#include "src/core/SkShaderCodeDictionary.h"
 #include "src/core/SkUniformData.h"
 
 namespace {
@@ -41,22 +44,22 @@ std::tuple<SkPaint, int> create_paint(skgpu::ShaderCombo::ShaderType shaderType,
             break;
         case skgpu::ShaderCombo::ShaderType::kLinearGradient:
             s = SkGradientShader::MakeLinear(pts, colors, offsets, 2, tm);
-            numUniforms += 6;
+            numUniforms += 7;
             break;
         case skgpu::ShaderCombo::ShaderType::kRadialGradient:
             s = SkGradientShader::MakeRadial({0, 0}, 100, colors, offsets, 2, tm);
-            numUniforms += 6;
+            numUniforms += 7;
             break;
         case skgpu::ShaderCombo::ShaderType::kSweepGradient:
             s = SkGradientShader::MakeSweep(0, 0, colors, offsets, 2, tm,
                                             0, 359, 0, nullptr);
-            numUniforms += 6;
+            numUniforms += 7;
             break;
         case skgpu::ShaderCombo::ShaderType::kConicalGradient:
             s = SkGradientShader::MakeTwoPointConical({100, 100}, 100,
                                                       {-100, -100}, 100,
                                                       colors, offsets, 2, tm);
-            numUniforms += 6;
+            numUniforms += 7;
             break;
     }
     SkPaint p;
@@ -72,6 +75,10 @@ DEF_GRAPHITE_TEST_FOR_CONTEXTS(UniformTest, reporter, context) {
     using namespace skgpu;
 
     auto recorder = context->makeRecorder();
+    SkKeyContext keyContext(recorder.get());
+    auto dict = keyContext.dict();
+
+    SkPaintParamsKeyBuilder builder(dict, SkBackend::kGraphite);
 
     // Intentionally does not include ShaderType::kNone, which represents no fragment shading stage
     // and is thus not relevant to uniform extraction/caching.
@@ -89,23 +96,27 @@ DEF_GRAPHITE_TEST_FOR_CONTEXTS(UniformTest, reporter, context) {
             }
 
             for (auto bm : { SkBlendMode::kSrc, SkBlendMode::kSrcOver }) {
-                SkPaintParamsKey expected = CreateKey(SkBackend::kGraphite, s, tm, bm);
-
                 auto [ p, expectedNumUniforms ] = create_paint(s, tm, bm);
-                auto dict = recorder->resourceProvider()->shaderCodeDictionary();
-                auto [ actualID, uniformBlock] = ExtractPaintData(dict, PaintParams(p));
-                int actualNumUniforms = uniformBlock->count();
 
-                auto entry = dict->lookup(actualID);
+                auto [ uniqueID1, pipelineData] = ExtractPaintData(recorder.get(), &builder,
+                                                                   PaintParams(p));
 
+                SkUniquePaintParamsID uniqueID2 = CreateKey(keyContext, &builder, s, tm, bm);
+                // ExtractPaintData and CreateKey agree
+                REPORTER_ASSERT(reporter, uniqueID1 == uniqueID2);
 
-                REPORTER_ASSERT(reporter, expected == entry->paintParamsKey());
-                REPORTER_ASSERT(reporter, expectedNumUniforms == actualNumUniforms);
-                for (auto& u : *uniformBlock) {
-                    for (int i = 0; i < u->count(); ++i) {
-                        REPORTER_ASSERT(reporter,
-                                        u->offset(i) >= 0 && u->offset(i) < u->dataSize());
+                // ExtractPaintData made the pipeline data we expected
+                {
+                    int actualNumUniforms = pipelineData->numUniforms();
+                    REPORTER_ASSERT(reporter, expectedNumUniforms == actualNumUniforms);
+                    for (const auto& u: *pipelineData) {
+                        for (int i = 0; i < u->count(); ++i) {
+                            REPORTER_ASSERT(reporter,
+                                            u->offset(i) >= 0 && u->offset(i) < u->dataSize());
+                        }
                     }
+
+                    // TODO: check the blendInfo here too
                 }
             }
         }

@@ -12,10 +12,10 @@
 #include "include/core/SkPaint.h"
 
 enum class SkBackend : uint8_t;
-class SkPaintParamsKey;
+class SkPaintParamsKeyBuilder;
+class SkPipelineData;
 class SkShader;
-class SkShaderCodeDictionary;
-class SkUniformBlock;
+class SkKeyContext;
 
 namespace skgpu {
 
@@ -37,17 +37,16 @@ public:
 
     SkColor4f color() const { return fColor; }
 
-    skstd::optional<SkBlendMode> asBlendMode() const;
+    std::optional<SkBlendMode> asBlendMode() const;
     SkBlender* blender() const { return fBlender.get(); }
     sk_sp<SkBlender> refBlender() const;
 
     SkShader* shader() const { return fShader.get(); }
     sk_sp<SkShader> refShader() const;
 
-    void toKey(SkShaderCodeDictionary*,
-               SkBackend,
-               SkPaintParamsKey*,
-               SkUniformBlock*) const;
+    void toKey(const SkKeyContext&,
+               SkPaintParamsKeyBuilder*,
+               SkPipelineData*) const;
 
 private:
     SkColor4f        fColor;

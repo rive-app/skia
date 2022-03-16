@@ -8,23 +8,29 @@
 #ifndef skgpu_Resource_DEFINED
 #define skgpu_Resource_DEFINED
 
-#include "include/private/SkNoncopyable.h"
+#include "experimental/graphite/src/GraphiteResourceKey.h"
+#include "experimental/graphite/src/ResourceTypes.h"
+#include "include/private/SkMutex.h"
 
 #include <atomic>
+
+class SkMutex;
 
 namespace skgpu {
 
 class Gpu;
+class ResourceCache;
 
 /**
- * Base class for Resource. Provides the hooks for resources to interact with the cache.
- * Separated out as a base class to isolate the ref-cnting behavior and provide friendship without
- * exposing all of Resource.
- *
- * AFTER the ref count reaches zero DERIVED::notifyARefCntIsZero() will be called.
+ * Base class for objects that can be kept in the ResourceCache.
  */
-template <typename DERIVED> class ResourceRef : public SkNoncopyable {
+class Resource {
 public:
+    Resource(const Resource&) = delete;
+    Resource(Resource&&) = delete;
+    Resource& operator=(const Resource&) = delete;
+    Resource& operator=(Resource&&) = delete;
+
     // Adds a usage ref to the resource. Named ref so we can easily manage usage refs with sk_sp.
     void ref() const {
         // Only the cache should be able to add the first usage ref to a resource.
@@ -33,18 +39,20 @@ public:
         (void)fUsageRefCnt.fetch_add(+1, std::memory_order_relaxed);
     }
 
-    // This enum is used to notify the ResourceCache which type of ref just dropped to zero.
-    enum class LastRemovedRef {
-        kUsageRef,
-        kCommandBufferRef,
-    };
-
     // Removes a usage ref from the resource
     void unref() const {
-        SkASSERT(this->hasUsageRef());
-        // A release here acts in place of all releases we "should" have been doing in ref().
-        if (1 == fUsageRefCnt.fetch_add(-1, std::memory_order_acq_rel)) {
-            this->notifyARefIsZero(LastRemovedRef::kUsageRef);
+        bool shouldFree = false;
+        {
+            SkAutoMutexExclusive locked(fUnrefMutex);
+            SkASSERT(this->hasUsageRef());
+            // A release here acts in place of all releases we "should" have been doing in ref().
+            if (1 == fUsageRefCnt.fetch_add(-1, std::memory_order_acq_rel)) {
+                shouldFree = this->notifyARefIsZero(LastRemovedRef::kUsage);
+            }
+        }
+        if (shouldFree) {
+            Resource* mutableThis = const_cast<Resource*>(this);
+            mutableThis->internalDispose();
         }
     }
 
@@ -56,16 +64,105 @@ public:
 
     // Removes a command buffer ref from the resource
     void unrefCommandBuffer() const {
-        SkASSERT(this->hasCommandBufferRef());
-        // A release here acts in place of all releases we "should" have been doing in ref().
-        if (1 == fCommandBufferRefCnt.fetch_add(-1, std::memory_order_acq_rel)) {
-            this->notifyARefIsZero(LastRemovedRef::kCommandBufferUsage);
+        bool shouldFree = false;
+        {
+            SkAutoMutexExclusive locked(fUnrefMutex);
+            SkASSERT(this->hasCommandBufferRef());
+            // A release here acts in place of all releases we "should" have been doing in ref().
+            if (1 == fCommandBufferRefCnt.fetch_add(-1, std::memory_order_acq_rel)) {
+                shouldFree = this->notifyARefIsZero(LastRemovedRef::kCommandBuffer);
+            }
+        }
+        if (shouldFree) {
+            Resource* mutableThis = const_cast<Resource*>(this);
+            mutableThis->internalDispose();
         }
     }
 
-protected:
-    ResourceRef() : fUsageRefCnt(1), fCommandBufferRefCnt(0) {}
+    Ownership ownership() const { return fOwnership; }
 
+    // Tests whether a object has been abandoned or released. All objects will be in this state
+    // after their creating Context is destroyed or abandoned.
+    //
+    // @return true if the object has been released or abandoned,
+    //         false otherwise.
+    // TODO: As of now this function isn't really needed because in freeGpuData we are always
+    // deleting this object. However, I want to implement all the purging logic first to make sure
+    // we don't have a use case for calling internalDispose but not wanting to delete the actual
+    // object yet.
+    bool wasDestroyed() const { return fGpu == nullptr; }
+
+    const GraphiteResourceKey& key() const { return fKey; }
+    // This should only ever be called by the ResourceProvider
+    void setKey(const GraphiteResourceKey& key) { fKey = key; }
+
+protected:
+    Resource(const Gpu*, Ownership);
+    virtual ~Resource();
+
+    // Overridden to free GPU resources in the backend API.
+    virtual void freeGpuData() = 0;
+
+private:
+    ////////////////////////////////////////////////////////////////////////////
+    // The following set of functions are only meant to be called by the ResourceCache. We don't
+    // want them public general users of a Resource, but they also aren't purely internal calls.
+    ////////////////////////////////////////////////////////////////////////////
+    friend ResourceCache;
+
+    // This version of ref allows adding a ref when the usage count is 0. This should only be called
+    // from the ResourceCache.
+    void initialUsageRef() const {
+        // Only the cache should be able to add the first usage ref to a resource.
+        SkASSERT(fUsageRefCnt >= 0);
+        // No barrier required.
+        (void)fUsageRefCnt.fetch_add(+1, std::memory_order_relaxed);
+    }
+
+    bool isPurgeable() const;
+    int* accessReturnIndex()  const { return &fReturnIndex; }
+    int* accessCacheIndex()  const { return &fCacheArrayIndex; }
+
+    uint32_t timestamp() const { return fTimestamp; }
+    void setTimestamp(uint32_t ts) { fTimestamp = ts; }
+
+    void registerWithCache(sk_sp<ResourceCache>);
+
+    // Adds a cache ref to the resource. This is only called by ResourceCache. A Resource will only
+    // ever add a ref when the Resource is part of the cache (i.e. when insertResource is called)
+    // and while the Resource is in the ResourceCache::ReturnQueue.
+    void refCache() const {
+        // No barrier required.
+        (void)fCacheRefCnt.fetch_add(+1, std::memory_order_relaxed);
+    }
+
+    // Removes a cache ref from the resource. The unref here should only ever be called from the
+    // ResourceCache and only in the Recorder thread the ResourceCache is part of.
+    void unrefCache() const {
+        bool shouldFree = false;
+        {
+            SkAutoMutexExclusive locked(fUnrefMutex);
+            SkASSERT(this->hasCacheRef());
+            // A release here acts in place of all releases we "should" have been doing in ref().
+            if (1 == fCacheRefCnt.fetch_add(-1, std::memory_order_acq_rel)) {
+                shouldFree = this->notifyARefIsZero(LastRemovedRef::kCache);
+            }
+        }
+        if (shouldFree) {
+            Resource* mutableThis = const_cast<Resource*>(this);
+            mutableThis->internalDispose();
+        }
+    }
+
+#ifdef SK_DEBUG
+    bool isUsableAsScratch() const {
+        return fKey.shareable() == Shareable::kNo && !this->hasUsageRef() && fNonShareableInCache;
+    }
+#endif
+
+    ////////////////////////////////////////////////////////////////////////////
+    // The remaining calls are meant to be truely private
+    ////////////////////////////////////////////////////////////////////////////
     bool hasUsageRef() const {
         if (0 == fUsageRefCnt.load(std::memory_order_acquire)) {
             // The acquire barrier is only really needed if we return true.  It
@@ -86,56 +183,61 @@ protected:
         return true;
     }
 
-    // Privileged method that allows going from ref count = 0 to ref count = 1.
-    void addInitialUsageRef() const {
-        SkASSERT(!this->hasUsageRef());
-        // No barrier required.
-        (void)fUsageRefCnt.fetch_add(+1, std::memory_order_relaxed);
+    bool hasCacheRef() const {
+        if (0 == fCacheRefCnt.load(std::memory_order_acquire)) {
+            // The acquire barrier is only really needed if we return true. It
+            // prevents code conditioned on the result of hasUsageRef() from running until previous
+            // owners are all totally done calling unref().
+            return false;
+        }
+        return true;
     }
 
-private:
-    void notifyARefIsZero(LastRemovedRef removedRef) const {
-        static_cast<const DERIVED*>(this)->notifyARefCntIsZero(removedRef);
+    bool hasAnyRefs() const {
+        return this->hasUsageRef() || this->hasCommandBufferRef() || this->hasCacheRef();
     }
+
+    bool notifyARefIsZero(LastRemovedRef removedRef) const;
+
+    // Frees the object in the underlying 3D API.
+    void internalDispose();
+
+    // We need to guard calling unref on the usage and command buffer refs since they each could be
+    // unreffed on different threads. This can lead to calling notifyARefIsZero twice with each
+    // instance thinking there are no more refs left and both trying to delete the object.
+    mutable SkMutex fUnrefMutex;
+
+    SkDEBUGCODE(mutable bool fCalledRemovedFromCache = false;)
+
+    // This is not ref'ed but internalDispose() will be called before the Gpu object is destroyed.
+    // That call will set this to nullptr.
+    const Gpu* fGpu;
 
     mutable std::atomic<int32_t> fUsageRefCnt;
     mutable std::atomic<int32_t> fCommandBufferRefCnt;
-};
+    mutable std::atomic<int32_t> fCacheRefCnt;
 
-/**
- * Base class for objects that can be kept in the ResourceCache.
- */
-class Resource : public ResourceRef<Resource> {
-public:
-    /**
-     * Tests whether a object has been abandoned or released. All objects will be in this state
-     * after their creating Context is destroyed or abandoned.
-     *
-     * @return true if the object has been released or abandoned,
-     *         false otherwise.
-     */
-    bool wasDestroyed() const { return fGpu == nullptr; }
+    GraphiteResourceKey fKey;
 
-protected:
-    Resource(const Gpu*);
-    virtual ~Resource();
+    sk_sp<ResourceCache> fReturnCache;
+    // An index into the return cache so we know whether or not the resource is already waiting to
+    // be returned or not.
+    mutable int fReturnIndex = -1;
 
-    /** Overridden to free GPU resources in the backend API. */
-    virtual void onFreeGpuData() = 0;
+    Ownership fOwnership;
 
-private:
-    friend class ResourceRef<Resource>; // to access notifyARefCntIsZero.
+    // An index into a heap when this resource is purgeable or an array when not. This is maintained
+    // by the cache.
+    mutable int fCacheArrayIndex = -1;
+    // This value reflects how recently this resource was accessed in the cache. This is maintained
+    // by the cache.
+    uint32_t fTimestamp;
 
-    void notifyARefCntIsZero(LastRemovedRef removedRef) const;
-
-    /**
-     * Frees the object in the underlying 3D API.
-     */
-    void freeGpuData();
-
-    // This is not ref'ed but abandon() or release() will be called before the Gpu object is
-    // destroyed. Those calls set will this to nullptr.
-    const Gpu* fGpu;
+    // This is only used during validation checking. Lots of the validation code depends on a
+    // resource being purgeable or not. However, purgeable itself just means having no refs. The
+    // refs can be removed before a Resource is returned to the cache (or even added to the
+    // ReturnQueue).
+    SkDEBUGCODE(mutable bool fNonShareableInCache = false);
 };
 
 } // namespace skgpu
