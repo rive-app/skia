@@ -784,12 +784,19 @@ sk_sp<GrRenderTarget> GrGLGpu::onWrapBackendRenderTarget(const GrBackendRenderTa
         return nullptr;
     }
 
-    const auto format = backendRT.getBackendFormat().asGLFormat();
-    if (!this->glCaps().isFormatRenderable(format, backendRT.sampleCnt())) {
+    if (!this->glCaps().isRenderTargetRenderable(backendRT)) {
         return nullptr;
     }
 
-    int sampleCount = this->glCaps().getRenderTargetSampleCount(backendRT.sampleCnt(), format);
+    const auto format = backendRT.getBackendFormat().asGLFormat();
+    int sampleCount;
+    if (info.fFBOID == 0) {
+        // FBO0 has different multisampling rules than offscreen render targets. If the user wrapped
+        // FBO0 and told us it's multisampled, just trust the provided sample count.
+        sampleCount = backendRT.sampleCnt();
+    } else {
+        sampleCount = this->glCaps().getRenderTargetSampleCount(backendRT.sampleCnt(), format);
+    }
 
     GrGLRenderTarget::IDs rtIDs;
     if (sampleCount <= 1) {
