@@ -33,7 +33,7 @@
 #include <cstdio>
 
 #ifndef GR_AA_TESSELLATOR_MAX_VERB_COUNT
-#define GR_AA_TESSELLATOR_MAX_VERB_COUNT 10
+#define GR_AA_TESSELLATOR_MAX_VERB_COUNT 1000
 #endif
 
 /*

@@ -30,6 +30,13 @@ namespace skgpu::v1 {
 
 PathRendererChain::PathRendererChain(GrRecordingContext* context, const Options& options) {
     const GrCaps& caps = *context->priv().caps();
+    if (options.fGpuPathRenderers & GpuPathRenderers::kAtlas) {
+        if (auto atlasPathRenderer = AtlasPathRenderer::Make(context)) {
+            fAtlasPathRenderer = atlasPathRenderer.get();
+            context->priv().addOnFlushCallbackObject(atlasPathRenderer.get());
+            fChain.push_back(std::move(atlasPathRenderer));
+        }
+    }
     if (options.fGpuPathRenderers & GpuPathRenderers::kDashLine) {
         fChain.push_back(sk_make_sp<DashLinePathRenderer>());
     }
@@ -41,13 +48,6 @@ PathRendererChain::PathRendererChain(GrRecordingContext* context, const Options&
     }
     if (options.fGpuPathRenderers & GpuPathRenderers::kAALinearizing) {
         fChain.push_back(sk_make_sp<AALinearizingConvexPathRenderer>());
-    }
-    if (options.fGpuPathRenderers & GpuPathRenderers::kAtlas) {
-        if (auto atlasPathRenderer = AtlasPathRenderer::Make(context)) {
-            fAtlasPathRenderer = atlasPathRenderer.get();
-            context->priv().addOnFlushCallbackObject(atlasPathRenderer.get());
-            fChain.push_back(std::move(atlasPathRenderer));
-        }
     }
     if (options.fGpuPathRenderers & GpuPathRenderers::kSmall) {
         fChain.push_back(sk_make_sp<SmallPathRenderer>());
