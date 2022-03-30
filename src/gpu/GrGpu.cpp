@@ -359,7 +359,7 @@ sk_sp<GrRenderTarget> GrGpu::wrapBackendRenderTarget(const GrBackendRenderTarget
 
     const GrCaps* caps = this->caps();
 
-    if (!caps->isFormatRenderable(backendRT.getBackendFormat(), backendRT.sampleCnt())) {
+    if (!caps->isRenderTargetRenderable(backendRT)) {
         return nullptr;
     }
 

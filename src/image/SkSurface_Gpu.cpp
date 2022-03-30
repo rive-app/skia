@@ -579,7 +579,7 @@ bool validate_backend_render_target(const GrCaps* caps, const GrBackendRenderTar
         return false;
     }
 
-    if (!caps->isFormatAsColorTypeRenderable(grCT, rt.getBackendFormat(), rt.sampleCnt())) {
+    if (!caps->isRenderTargetAsColorTypeRenderable(grCT, rt)) {
         return false;
     }
 
