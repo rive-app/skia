@@ -90,8 +90,8 @@ constexpr static int kAtlasInitialSize = 512;
 // height, which lends very well to efficient pow2 atlas packing.
 constexpr static auto kAtlasAlgorithm = GrDynamicAtlas::RectanizerAlgorithm::kPow2;
 
-// Ensure every path in the atlas falls in or below the 256px high rectanizer band.
-constexpr static int kAtlasMaxPathHeight = 256;
+// Ensure every path in the atlas falls in or below the 512px high rectanizer band.
+constexpr static int kAtlasMaxPathHeight = 512;
 
 // If we have MSAA to fall back on, paths are already fast enough that we really only benefit from
 // atlasing when they are very small.
