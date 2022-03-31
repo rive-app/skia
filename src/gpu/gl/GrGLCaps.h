@@ -125,7 +125,10 @@ public:
 
     bool isFormatAsColorTypeRenderable(GrColorType ct, const GrBackendFormat& format,
                                        int sampleCount = 1) const override;
+    bool isRenderTargetAsColorTypeRenderable(GrColorType,
+                                             const GrBackendRenderTarget&) const override;
     bool isFormatRenderable(const GrBackendFormat& format, int sampleCount) const override;
+    bool isRenderTargetRenderable(const GrBackendRenderTarget&) const override;
     bool isFormatRenderable(GrGLFormat format, int sampleCount) const {
         return sampleCount <= this->maxRenderTargetSampleCount(format);
     }

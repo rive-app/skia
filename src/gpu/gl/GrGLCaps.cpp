@@ -4628,6 +4628,20 @@ bool GrGLCaps::isFormatAsColorTypeRenderable(GrColorType ct, const GrBackendForm
     return this->isFormatRenderable(f, sampleCount);
 }
 
+bool GrGLCaps::isRenderTargetAsColorTypeRenderable(GrColorType ct,
+                                                   const GrBackendRenderTarget& rt) const {
+    int sampleCntToCheck;
+    GrGLFramebufferInfo fbi;
+    if (rt.getGLFramebufferInfo(&fbi) && fbi.fFBOID == 0) {
+        // FBO0 has different multisampling rules than offscreen render targets. If the user wrapped
+        // FBO0 and told us it's multisampled, just trust that the msaa is valid.
+        sampleCntToCheck = 1;
+    } else {
+        sampleCntToCheck = rt.sampleCnt();
+    }
+    return this->isFormatAsColorTypeRenderable(ct, rt.getBackendFormat(), sampleCntToCheck);
+}
+
 bool GrGLCaps::isFormatRenderable(const GrBackendFormat& format, int sampleCount) const {
     if (format.textureType() == GrTextureType::kRectangle && !this->rectangleTextureSupport()) {
         return false;
@@ -4636,6 +4650,19 @@ bool GrGLCaps::isFormatRenderable(const GrBackendFormat& format, int sampleCount
         return false;
     }
     return this->isFormatRenderable(format.asGLFormat(), sampleCount);
+}
+
+bool GrGLCaps::isRenderTargetRenderable(const GrBackendRenderTarget& rt) const {
+    int sampleCntToCheck;
+    GrGLFramebufferInfo fbi;
+    if (rt.getGLFramebufferInfo(&fbi) && fbi.fFBOID == 0) {
+        // FBO0 has different multisampling rules than offscreen render targets. If the user wrapped
+        // FBO0 and told us it's multisampled, just trust that the msaa is valid.
+        sampleCntToCheck = 1;
+    } else {
+        sampleCntToCheck = rt.sampleCnt();
+    }
+    return this->isFormatRenderable(rt.getBackendFormat(), sampleCntToCheck);
 }
 
 int GrGLCaps::getRenderTargetSampleCount(int requestedCount, GrGLFormat format) const {
