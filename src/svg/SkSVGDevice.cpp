@@ -355,6 +355,10 @@ private:
                                   const SkShader* shader,
                                   const SkMatrix& localMatrix);
 
+    SkString addRadialGradientDef(const SkShaderBase::GradientInfo& info,
+                                  const SkShader* shader,
+                                  const SkMatrix& localMatrix);
+
     SkXMLWriter*               fWriter;
     ResourceBucket*            fResourceBucket;
 };
@@ -445,7 +449,8 @@ void SkSVGDevice::AutoElement::addGradientShaderResources(const SkShader* shader
     const auto gradient_type = as_SB(shader)->asGradient(&grInfo);
 
     if (gradient_type != SkShaderBase::GradientType::kColor &&
-        gradient_type != SkShaderBase::GradientType::kLinear) {
+        gradient_type != SkShaderBase::GradientType::kLinear &&
+        gradient_type != SkShaderBase::GradientType::kRadial) {
         // TODO: other gradient support
         return;
     }
@@ -464,7 +469,9 @@ void SkSVGDevice::AutoElement::addGradientShaderResources(const SkShader* shader
     SkASSERT(grColors.size() > 0);
     resources->fPaintServer = gradient_type == SkShaderBase::GradientType::kColor
             ? svg_color(grColors[0])
-            : SkStringPrintf("url(#%s)", addLinearGradientDef(grInfo, shader, localMatrix).c_str());
+            : gradient_type == SkShaderBase::GradientType::kRadial
+                ? SkStringPrintf("url(#%s)", addRadialGradientDef(grInfo, shader, localMatrix).c_str()) 
+                : SkStringPrintf("url(#%s)", addLinearGradientDef(grInfo, shader, localMatrix).c_str());
 }
 
 void SkSVGDevice::AutoElement::addColorFilterResources(const SkColorFilter& cf,
@@ -630,6 +637,48 @@ SkString SkSVGDevice::AutoElement::addLinearGradientDef(const SkShaderBase::Grad
         gradient.addAttribute("y1", info.fPoint[0].y());
         gradient.addAttribute("x2", info.fPoint[1].x());
         gradient.addAttribute("y2", info.fPoint[1].y());
+
+        if (!localMatrix.isIdentity()) {
+            this->addAttribute("gradientTransform", svg_transform(localMatrix));
+        }
+
+        SkASSERT(info.fColorCount >= 2);
+        for (int i = 0; i < info.fColorCount; ++i) {
+            SkColor color = info.fColors[i];
+            SkString colorStr(svg_color(color));
+
+            {
+                AutoElement stop("stop", fWriter);
+                stop.addAttribute("offset", info.fColorOffsets[i]);
+                stop.addAttribute("stop-color", colorStr.c_str());
+
+                if (SK_AlphaOPAQUE != SkColorGetA(color)) {
+                    stop.addAttribute("stop-opacity", svg_opacity(color));
+                }
+            }
+        }
+    }
+
+    return id;
+}
+
+SkString SkSVGDevice::AutoElement::addRadialGradientDef(const SkShaderBase::GradientInfo& info,
+                                                        const SkShader* shader,
+                                                        const SkMatrix& localMatrix) {
+    SkASSERT(fResourceBucket);
+    SkString id = fResourceBucket->addLinearGradient();
+
+    {
+        AutoElement gradient("radialGradient", fWriter);
+
+        gradient.addAttribute("id", id);
+        gradient.addAttribute("gradientUnits", "userSpaceOnUse");
+        gradient.addAttribute("cx", info.fPoint[0].x());
+        gradient.addAttribute("cy", info.fPoint[0].y());
+        gradient.addAttribute("fx", info.fPoint[0].x());
+        gradient.addAttribute("fy", info.fPoint[0].y());
+        gradient.addAttribute("r", info.fRadius[0]);
+        gradient.addAttribute("fr", info.fRadius[1]);
 
         if (!localMatrix.isIdentity()) {
             this->addAttribute("gradientTransform", svg_transform(localMatrix));
@@ -960,6 +1009,61 @@ void SkSVGDevice::drawPath(const SkPath& path, const SkPaint& paint, bool pathIs
     if (pathPtr->getFillType() == SkPathFillType::kEvenOdd) {
         elem.addAttribute("fill-rule", "evenodd");
     }
+
+    if (std::optional<SkBlendMode> mode = paint.asBlendMode()) {
+        std::string blendMode = "";
+        switch(*mode) {
+            case SkBlendMode::kMultiply:
+            blendMode = "multiply";
+            break;
+            case SkBlendMode::kScreen:
+            blendMode = "screen";
+            break;
+            case SkBlendMode::kOverlay:
+            blendMode = "overlay";
+            break;
+            case SkBlendMode::kDarken:
+            blendMode = "darken";
+            break;
+            case SkBlendMode::kLighten:
+            blendMode = "lighten";
+            break;
+            case SkBlendMode::kColorDodge:
+            blendMode = "color-dodge";
+            break;
+            case SkBlendMode::kColorBurn:
+            blendMode = "color-burn";
+            break;
+            case SkBlendMode::kHardLight:
+            blendMode = "hard-light";
+            break;
+            case SkBlendMode::kSoftLight:
+            blendMode = "soft-light";
+            break;
+            case SkBlendMode::kDifference:
+            blendMode = "difference";
+            break;
+            case SkBlendMode::kExclusion:
+            blendMode = "exclusion";
+            break;
+            case SkBlendMode::kHue:
+            blendMode = "hue";
+            break;
+            case SkBlendMode::kSaturation:
+            blendMode = "saturation";
+            break;
+            case SkBlendMode::kColor:
+            blendMode = "color";
+            break;
+            case SkBlendMode::kLuminosity:
+            blendMode = "luminosity";
+            break;
+        }
+        if(!blendMode.empty()) {
+            std::string styleValue = "mix-blend-mode: " + blendMode;
+            elem.addAttribute("style", styleValue.c_str());
+        }
+    }
 }
 
 static sk_sp<SkData> encode(const SkBitmap& src) {
@@ -995,6 +1099,7 @@ void SkSVGDevice::drawBitmapCommon(const MxCp& mc, const SkBitmap& bm, const SkP
     {
         AutoElement imageUse("use", this, fResourceBucket.get(), mc, paint);
         imageUse.addAttribute("xlink:href", SkStringPrintf("#%s", imageID.c_str()));
+        imageUse.addAttribute("opacity", svg_opacity(paint.getColor()));
     }
 }
 
