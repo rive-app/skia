@@ -678,7 +678,7 @@ SkString SkSVGDevice::AutoElement::addRadialGradientDef(const SkShaderBase::Grad
         gradient.addAttribute("fx", info.fPoint[0].x());
         gradient.addAttribute("fy", info.fPoint[0].y());
         gradient.addAttribute("r", info.fRadius[0]);
-        gradient.addAttribute("fr", info.fRadius[1]);
+        gradient.addAttribute("fr", 0);
 
         if (!localMatrix.isIdentity()) {
             this->addAttribute("gradientTransform", svg_transform(localMatrix));
